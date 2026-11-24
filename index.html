@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nawyki i Talerz</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2e7d5b">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nawyki">
+<meta name="description" content="Nawyki, pamiętnik, cele, licznik kalorii ze zdjęć i mentor AI w jednej aplikacji">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<header><button id="back" class="backb noprint" data-a="back" aria-label="Wróć do poprzedniej zakładki" hidden>‹</button><div style="flex:1;min-width:0"><h1 id="gr">Nawyki i Talerz</h1><div class="sub" id="dt"></div></div></header>
+<div id="v"></div>
+</main>
+<div id="tzwrap" class="noprint" hidden></div>
+<button class="fab noprint" data-a="fab" aria-label="Szybki wpis">+</button>
+<nav class="bnav noprint"><div id="tabs"></div></nav>
+<div id="sheet"></div>
+<div id="lock"></div>
+<input type="file" id="imp" accept=".json,application/json" hidden>
+<input type="file" id="pic" accept="image/*" hidden>
+<input type="file" id="cam" accept="image/*" capture="environment" hidden>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

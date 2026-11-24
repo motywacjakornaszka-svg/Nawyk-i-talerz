@@ -1,0 +1,20 @@
+{
+  "name": "Nawyki i Talerz",
+  "short_name": "Nawyki",
+  "description": "Nawyki, pamiętnik, cele, licznik kalorii ze zdjęć i mentor AI w jednej aplikacji",
+  "lang": "pl",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#2e7d5b",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Dodaj posiłek", "short_name": "Posiłek", "url": "./?akcja=posilek", "icons": [{"src": "icon-192.png", "sizes": "192x192"}]},
+    {"name": "Dodaj wodę", "short_name": "Woda", "url": "./?akcja=woda", "icons": [{"src": "icon-192.png", "sizes": "192x192"}]}
+  ]
+}
