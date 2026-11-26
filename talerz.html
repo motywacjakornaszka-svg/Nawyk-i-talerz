@@ -344,6 +344,21 @@
   .ksteps{font-size:12px;color:var(--muted);margin:0 0 6px}
   .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.on{opacity:1}
+  /* ---------- 4.1: szybkie dodawanie ulubionych i częstych posiłków ---------- */
+  .qhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0 6px}
+  .qport{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--muted)}
+  .qport button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 9px;font:inherit;font-weight:700;color:var(--ink);cursor:pointer}
+  .qport button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .qlist{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;scrollbar-width:thin}
+  .qi{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);border-radius:14px;padding:6px 10px 6px 6px;cursor:pointer;font:inherit;color:var(--ink);text-align:left;max-width:230px}
+  .qi:active{transform:scale(.97)}
+  .qi img,.qi .ph{width:38px;height:38px;border-radius:10px;object-fit:cover;flex:none;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .qi b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+  .qi small{display:block;color:var(--muted);font-size:11px}
+  .stat.hasdk{flex-wrap:wrap;row-gap:0;column-gap:4px}
+  .stat.hasdk b{margin-left:auto}
+  .stat.hasdk::after{content:'🥤 ' attr(data-dk);flex-basis:100%;text-align:right;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
+  .wtrend{font-size:13px;font-weight:600;margin:2px 0 6px}
   /* ---------- tryb osadzony: zakładka „Jedzenie” w Nawykach ---------- */
   html.embed .wrap{padding:10px 14px 96px}
   html.embed header.top{margin-bottom:8px}
@@ -612,6 +627,11 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
     <div class="row" style="justify-content:space-between"><h3 id="sheetTitle">🍽️ Nowy posiłek</h3><button class="iconbtn" id="closeSheet" aria-label="Zamknij">✕</button></div>
 
+    <div id="quick" class="hidden">
+      <div class="qhead"><span class="small muted" style="font-weight:700">⚡ Szybko dodaj</span>
+        <span class="qport" id="qPort">Porcja <button type="button" data-m="0.5">½</button><button type="button" data-m="1" class="on">1</button><button type="button" data-m="1.5">1½</button><button type="button" data-m="2">2</button></span></div>
+      <div class="qlist" id="qList"></div>
+    </div>
     <div class="pick">
       <label class="picktile" id="drop" for="photo">
         <div id="dropTxt"><div class="pi">📷</div><b>Zdjęcie</b></div>
@@ -656,7 +676,7 @@
 <div class="toast" id="toast"></div>
 <script>
 (() => {
-  const APP_VERSION = '17';
+  const APP_VERSION = '17 · 4.1';
   // ---------- narzędzia ----------
   const $ = id => document.getElementById(id);
   const r0 = n => Math.round(Number(n) || 0);
@@ -830,6 +850,7 @@
     if (document.activeElement !== $('extra')) $('extra').value = day.extra || '';
 
     $('sEaten').textContent = fmt(t.kcal) + ' kcal';
+    const se = $('sEaten').parentNode; se.classList.toggle('hasdk', t.drinkKcal >= 1); se.dataset.dk = t.drinkKcal >= 1 ? `w tym napoje ${fmt(t.drinkKcal)} kcal` : '';
     $('sSteps').textContent = c ? '+' + fmt(c.stepKcal + c.exKcal) + ' kcal' : '–';
     const arc = $('ringArc'), L = 402.1;
     if (c) {
@@ -899,12 +920,15 @@
         if (del.dataset.armed) { day.meals = day.meals.filter(x => x.id !== m.id); await saveDay(); renderToday(); toast('🗑 Usunięto'); }
         else { del.dataset.armed = 1; del.textContent = '✓?'; del.style.color = 'var(--warn)'; setTimeout(()=>{ delete del.dataset.armed; del.textContent='🗑'; del.style.color=''; }, 2500); }
       };
-      el.append(img, info, kc, del);
+      const st = document.createElement('button'); st.className = 'iconbtn'; st.textContent = isFav(m) ? '⭐' : '☆';
+      st.setAttribute('aria-label', isFav(m) ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'); st.title = 'Ulubiony – szybkie dodawanie';
+      st.onclick = () => toggleFav(m);
+      el.append(img, info, kc, st, del);
       box.appendChild(el);
     });
     if (ds.kcal >= 1) {
       const el = document.createElement('div'); el.className = 'meal';
-      el.innerHTML = `<div class="ph">🥤</div><div class="info"><div class="name">Napoje</div><div class="small muted">🍬 ${fmt(ds.sug)} g cukru</div></div><div class="kc">${fmt(ds.kcal)}</div><div style="width:34px"></div>`;
+      el.innerHTML = `<div class="ph">🥤</div><div class="info"><div class="name">Napoje</div><div class="small muted">🍬 ${fmt(ds.sug)} g cukru</div></div><div class="kc">${fmt(ds.kcal)}</div><div style="width:68px"></div>`;
       box.appendChild(el);
     }
   }
@@ -1066,6 +1090,22 @@
     renderWeight();
   }
   let wSel = null; // data wybranego punktu na wykresie wagi
+  // trend wagi: średnia z 7 dni i tempo (prosta dopasowana do wpisów z ostatnich 28 dni)
+  function weightTrend(all){
+    if (!all.length) return null;
+    const tt = w => parseKey(w.date).getTime(), t1 = tt(all[all.length-1]);
+    const w28 = all.filter(w => t1 - tt(w) <= 28*864e5), w7 = all.filter(w => t1 - tt(w) < 7*864e5);
+    const r = { avg7: w7.reduce((s,w) => s + +w.kg, 0) / w7.length, n7: w7.length, rate: null, eta: null };
+    if (w28.length >= 3 && (t1 - tt(w28[0])) / 864e5 >= 7) {
+      const xs = w28.map(w => (tt(w) - t1) / (7*864e5)), ys = w28.map(w => +w.kg);
+      const mx = xs.reduce((a,b) => a+b, 0) / xs.length, my = ys.reduce((a,b) => a+b, 0) / ys.length;
+      let nu = 0, de = 0; xs.forEach((x,i) => { nu += (x-mx)*(ys[i]-my); de += (x-mx)*(x-mx); });
+      if (de > 0) r.rate = nu / de;
+    }
+    const goal = profile && +profile.goal;
+    if (goal && r.rate && Math.abs(r.rate) >= 0.05 && (goal - r.avg7) / r.rate > 0) r.eta = Math.ceil((goal - r.avg7) / r.rate);
+    return r;
+  }
   function renderWeight(){
     const all = (profile && profile.weights || []).slice().sort((a,b)=>a.date.localeCompare(b.date));
     const ws = all.slice(-30);
@@ -1103,6 +1143,12 @@
     });
     const goalLine = goal && goal >= min && goal <= max ? `<line x1="${L}" x2="${W-R}" y1="${y(goal)}" y2="${y(goal)}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 5"/><text x="${W-R}" y="${y(goal)-5}" text-anchor="end" font-size="14" font-weight="700" fill="var(--accent)">🎯 ${fmt1(goal)} kg</text>` : '';
     const pts = ws.map(w => `${x(w)},${y(w.kg)}`).join(' ');
+    // linia trendu: średnia z 7 dni dla każdego wpisu
+    const avgAt = w => { const t = parseKey(w.date).getTime(), a = all.filter(v => { const d = t - parseKey(v.date).getTime(); return d >= 0 && d < 7*864e5; }); return a.reduce((s,v) => s + +v.kg, 0) / a.length; };
+    const tPts = ws.length >= 3 ? ws.map(w => `${x(w)},${y(Math.min(max, Math.max(min, avgAt(w))))}`).join(' ') : '';
+    const tr = weightTrend(all);
+    const trTxt = tr ? `<div class="wtrend">${tr.rate == null ? '📊' : tr.rate < -0.05 ? '📉' : tr.rate > 0.05 ? '📈' : '➡️'} Średnia 7 dni: ${fmt1(tr.avg7)} kg` +
+      (tr.rate != null ? ` · tempo ${tr.rate > 0 ? '+' : ''}${fmt1(tr.rate)} kg/tydz.` + (tr.eta ? ` · cel za ok. ${tr.eta} tyg.` : '') : ` <span class="muted" style="font-weight:400">· tempo pojawi się po tygodniu ważenia (min. 3 wpisy)</span>`) + `</div>` : '';
     const area = ws.length > 1 ? `<polygon points="${x(ws[0])},${H-B} ${pts} ${x(ws[ws.length-1])},${H-B}" fill="var(--accent)" opacity=".10"/>` : '';
     const sel = ws.find(w => w.date === wSel) || ws[ws.length-1];
     const si = ws.indexOf(sel), prev = si > 0 ? ws[si-1] : null;
@@ -1115,14 +1161,16 @@
         <div><div class="wbig">${fmt1(sel.kg)} kg</div><div class="small muted">📅 ${weightWhen(sel)}</div></div>
         <div class="small" style="text-align:right">${ch !== null ? `<div style="color:${col(ch)};font-weight:700">${sgn(ch)} kg od poprz.</div>` : ''}${ws.length > 1 ? `<div class="muted">${sgn(total)} kg w ${ws.length} wpisach</div>` : ''}</div>
       </div>
+      ${trTxt}
       <svg id="wSvg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Wykres wagi" style="touch-action:pan-y;cursor:pointer;display:block">
         ${grid}${goalLine}${area}
         <line x1="${x(sel)}" x2="${x(sel)}" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="3 4"/>
+        ${tPts ? `<polyline points="${tPts}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="7 6" stroke-linejoin="round" opacity=".8"/>` : ''}
         <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
         ${ws.map(w => `<circle cx="${x(w)}" cy="${y(w.kg)}" r="${w === sel ? 7 : 4}" fill="${w === sel ? 'var(--accent)' : 'var(--card)'}" stroke="var(--accent)" stroke-width="2.5"><title>${weightWhen(w)}: ${fmt1(w.kg)} kg</title></circle>`).join('')}
         ${xl}
       </svg>
-      <div class="muted" style="text-align:center;font-size:12px">👆 Dotknij punktu – waga, dzień i godzina</div>${entries}`;
+      <div class="muted" style="text-align:center;font-size:12px">👆 Dotknij punktu – waga, dzień i godzina${tPts ? ' · - - - średnia z 7 dni' : ''}</div>${entries}`;
     const svg = $('wSvg');
     const pick = e => {
       const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W;
@@ -1144,6 +1192,59 @@
     if (dayKey === tk) { await saveDay(); renderToday(); }
   };
 
+  // ---------- ULUBIONE I CZĘSTE POSIŁKI (szybkie dodawanie) ----------
+  function normName(s){ return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+  function isFav(m){ return (profile && profile.fav || []).some(f => normName(f.name) === normName(m.name)); }
+  function mealCopy(m){ return { name:m.name || 'Posiłek', kcal:+m.kcal || 0, p:+m.p || 0, c:+m.c || 0, f:+m.f || 0, items:JSON.parse(JSON.stringify(m.items || [])), thumb:m.thumb || null }; }
+  async function toggleFav(m){
+    if (!profile) { showTab('profile'); toast('Najpierw uzupełnij profil'); return; }
+    const L = profile.fav = profile.fav || [], i = L.findIndex(f => normName(f.name) === normName(m.name));
+    if (i >= 0) { L.splice(i, 1); toast('☆ Usunięto z ulubionych'); }
+    else { L.unshift(mealCopy(m)); if (L.length > 30) L.length = 30; toast('⭐ W ulubionych – dodasz jednym dotknięciem w „＋ Posiłek”'); }
+    await save('profile', profile); renderToday();
+  }
+  // posiłki jedzone co najmniej 2 razy w ostatnich 30 dniach, potem ostatnie z 3 dni
+  function recentMeals(skip){
+    const cnt = {}, now = new Date();
+    for (let i = 0; i <= 30; i++) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      let rec = null; try { rec = JSON.parse(localStorage.getItem('talerz:day-' + keyOf(d))); } catch {}
+      (rec && rec.meals || []).slice().reverse().forEach(m => { const n = normName(m.name); if (!n || skip.has(n)) return; const c = cnt[n] || (cnt[n] = { n:0, m, last:i }); c.n++; });
+    }
+    const all = Object.values(cnt);
+    const freq = all.filter(c => c.n >= 2).sort((a,b) => b.n - a.n || a.last - b.last);
+    const rec = all.filter(c => c.n < 2 && c.last <= 3).sort((a,b) => a.last - b.last);
+    return freq.concat(rec).slice(0, 14).map(c => c.m);
+  }
+  let qMult = 1;
+  function renderQuick(){
+    const fav = (profile && profile.fav || []).map(m => ({ m, fav:true }));
+    const seen = new Set(fav.map(x => normName(x.m.name)));
+    const list = fav.concat(recentMeals(seen).map(m => ({ m }))).slice(0, 18);
+    $('quick').classList.toggle('hidden', !list.length);
+    const box = $('qList'); box.innerHTML = '';
+    list.forEach(({ m, fav }) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'qi';
+      const im = m.thumb ? Object.assign(document.createElement('img'), { src:m.thumb, alt:'' }) : Object.assign(document.createElement('span'), { className:'ph', textContent:'🍽️' });
+      const tx = document.createElement('span');
+      tx.innerHTML = `<b>${fav ? '⭐ ' : ''}${esc(m.name || 'Posiłek')}</b><small>${fmt((+m.kcal || 0) * qMult)} kcal · B ${r0((+m.p || 0) * qMult)} g</small>`;
+      b.append(im, tx); b.onclick = () => quickAdd(m);
+      box.appendChild(b);
+    });
+  }
+  document.querySelectorAll('#qPort button').forEach(b => b.onclick = () => {
+    qMult = +b.dataset.m; document.querySelectorAll('#qPort button').forEach(x => x.classList.toggle('on', x === b)); renderQuick();
+  });
+  async function quickAdd(m){
+    const k = qMult, c = mealCopy(m), now = new Date();
+    const meal = { id:uid(), time:`${pad(now.getHours())}:${pad(now.getMinutes())}`, name:c.name,
+      kcal:r0(c.kcal * k), p:r1(c.p * k), c:r1(c.c * k), f:r1(c.f * k), thumb:c.thumb,
+      items:c.items.map(x => Object.assign({}, x, { grams:r0((+x.grams || 0) * k), kcal:r0((+x.kcal || 0) * k), p:r1((+x.p || 0) * k), c:r1((+x.c || 0) * k), f:r1((+x.f || 0) * k), sug:r1((+x.sug || 0) * k) })) };
+    day.meals.push(meal);
+    await saveDay(); closeSheet(); renderToday();
+    toast(`⚡ ${meal.name}${k !== 1 ? ' ×' + String(k).replace('.', ',') : ''} · +${fmt(meal.kcal)} kcal`);
+  }
+
   // ---------- NOWY POSIŁEK ----------
   let photoBlob = null, photoB64 = null, thumb = null, items = [], aiAbort = null;
   function openSheet(){
@@ -1152,6 +1253,7 @@
     $('photo').value = ''; $('hint').value = ''; $('analyze').disabled = true; $('aiStatus').innerHTML = ''; stopMic(true);
     $('result').classList.add('hidden'); $('mealName').value = ''; $('aiNotes').textContent = '';
     $('manual').classList.remove('hidden'); document.querySelectorAll('#result .card').forEach(n => n.remove()); $('addItem').classList.remove('hidden');
+    qMult = 1; document.querySelectorAll('#qPort button').forEach(x => x.classList.toggle('on', x.dataset.m === '1')); renderQuick();
     $('sheetBg').classList.add('open');
   }
   function closeSheet(){ if (aiAbort) aiAbort.abort(); stopMic(true); $('sheetBg').classList.remove('open'); }

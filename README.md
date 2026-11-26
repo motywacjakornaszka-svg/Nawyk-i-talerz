@@ -1,4 +1,4 @@
-# Nawyki i Talerz 4.0
+# Nawyki i Talerz 4.1
 
 Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i Talerz (licznik kalorii ze zdjęć, płyny, kroki, waga) w jednej aplikacji.
 
@@ -7,13 +7,27 @@ Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i
 - **Nawyki ⚡ zaliczają się same** z danych Jedzenia. Na start:
   - „Wypicie 2 litrów wody”: płyny 1000 / 1500 / 2000 ml;
   - „Owoc i warzywo”: 100 / 250 / 400 g;
-  - „Spacer (kroki)”: 4000 / 7000 / 10 000 kroków.
+  - „Spacer (kroki)”: 4000 / 7000 / 10 000 kroków;
+  - „Szklanka wody rano / białko”: 50 / 75 / 100% dziennej normy białka.
   W „✏️ Edytuj nawyki” możesz zmienić progi albo podpiąć inny nawyk do: wody, warzyw, kroków, cukrów wolnych lub „jedzenie zapisane i w limicie”. Nawyk zawsze możesz też zaznaczyć ręcznie, a liczy się wyższy z dwóch poziomów.
 - **Karta Jedzenia na ekranie Dziś**: kalorie / limit, płyny, warzywa i kroki, z szybkimi przyciskami 📷 Posiłek, 💧 Woda i 👟 Kroki. Posiłek i wodę dodasz też przyciskiem ＋.
 - **Mentor AI widzi jedzenie, płyny, kroki i wagę.** Możesz to wyłączyć w Ustawieniach → Prywatność.
 - **Postęp**: karta „Jedzenie – ostatnie 7 dni” (dni w limicie, cel płynów, warzywa, kroki, zmiana wagi).
 - **Wspólne klucze AI** (Gemini i Claude): klucz dodany w jednym miejscu działa w obu częściach.
 - **Kopia zapasowa** (Więcej → Kopie i dane) zawiera także dane Jedzenia.
+
+## Nowości w 4.1
+- **⚡ Szybko dodaj posiłek**: w „＋ Posiłek” na górze są ⭐ ulubione i posiłki, które jesz często, z wyborem porcji (½, 1, 1½, 2). Gwiazdka ☆ przy posiłku na liście dodaje go do ulubionych.
+- **Napoje w kaloriach**: przy „Zjedzone” widać, ile kalorii pochodzi z napojów. Napoje zawsze się wliczały, teraz jest to widoczne.
+- **Trend wagi**: średnia z 7 dni (przerywana linia na wykresie), tempo w kg na tydzień i przewidywany czas do celu.
+- **Nawyk ⚡ białko**: „Szklanka wody rano / białko” zalicza się sam: 50 / 75 / 100% dziennej normy białka.
+- **🌆 Wieczorny bilans o 18:00**: karta na ekranie Dziś i powiadomienie. Pokazuje, ile zostało kalorii, ile brakuje płynów, warzyw, białka i kroków oraz które serie warto chronić.
+- **🔥 Ochrona serii o 21:00**: przypomnienie, gdy nawyk z serią 3+ dni nie jest jeszcze dziś zaliczony.
+- **🎯 Cel żywieniowy tygodnia**: jeden cel (np. 400 g warzyw przez 5 dni), liczony sam z danych Jedzenia.
+- **🧭 Co zjeść jutro?**: mentor analizuje posiłki z ostatnich dni i proponuje jadłospis z listą zakupów.
+- **🧠 Podpowiedź mentora w pamiętniku**: analiza odpowiedzi na pytania dnia pod kątem zdrowego myślenia. Przegląd tygodnia ma też sekcje o jedzeniu i myśleniu.
+- **Moduły**: post przerywany, rytm dnia i projekty są ukryte. Włączysz je w Ustawienia → 🧩 Moduły, a ich dane zostają.
+- Przypomnienia (bilans, serie, pamiętnik, eksport do kalendarza) są teraz w Ustawienia → 🔔 Przypomnienia.
 
 ## Uruchomienie na GitHub Pages
 1. Na koncie **motywacjakornaszka-svg** utwórz nowe repozytorium, np. `nawyki-talerz`, z widocznością **Public**.
@@ -29,7 +43,7 @@ Warunek: używasz **tej samej przeglądarki na tym samym telefonie**. Dla bezpie
 Po przejściu korzystaj już tylko z nowej aplikacji. Stare możesz zostawić na jakiś czas jako zapas, bo pracują na tych samych danych.
 
 ## Aktualizacje
-Po zmianie plików podbij `VERSION` w `sw.js` (np. `nawyki-talerz-v4.0-2`). Zamknij aplikację i otwórz ją ponownie.
+Po zmianie plików podbij `VERSION` w `sw.js` (np. `nawyki-talerz-v4.1-2`). Zamknij aplikację i otwórz ją ponownie.
 
 ## Pliki
 - `index.html`, `app.js`, `data.js`, `style.css`: Nawyki (aplikacja główna);

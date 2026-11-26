@@ -1,6 +1,6 @@
 // Service worker aplikacji „Nawyki i Talerz”: działanie offline. Zapytania do API AI zawsze idą prosto do sieci.
 // Po każdej zmianie plików podbij numer wersji, żeby telefony pobrały nową wersję.
-const VERSION = 'nawyki-talerz-v4.0-1';
+const VERSION = 'nawyki-talerz-v4.1-1';
 const PREFIX = 'nawyki-talerz-';
 const SHELL = ['./', './index.html', './style.css', './data.js', './app.js', './talerz.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon.svg'];
 

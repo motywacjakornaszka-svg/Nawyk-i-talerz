@@ -1,7 +1,7 @@
-/* Nawyki i Talerz 4.0 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
+/* Nawyki i Talerz 4.1 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
 (function () {
 "use strict";
-var VER = "4.0";
+var VER = "4.1";
 var KEY = "nawyki-v3", OLD = "nawyki-v2", KEYS = "nawyki-v3-klucze";
 var CATS = NAW.CATS, LV = NAW.LV, ST = NAW.ST, ET = NAW.ET, PROV = NAW.PROV;
 
@@ -128,59 +128,187 @@ function toWav(blob) {
 
 /* ---------- obliczenia nawyków ---------- */
 /* ---------- JEDZENIE: dane z Talerza (ten sam adres = ta sama pamięć przeglądarki) ---------- */
-/* Obliczenia odpowiadają funkcjom drinkStats/foodStats/totals w talerz.html – przy zmianie tam, zmień też tu. */
-var TZ_DR = { kawa: [2, 0], mleko: [50, 0], sok: [45, 9], slodki: [42, 10.6], nektar: [50, 11], energ: [45, 11], piwo: [43, 0, 1], wino: [83, 0, 1] };
+/* Obliczenia odpowiadają funkcjom drinkStats/foodStats/totals/calc w talerz.html – przy zmianie tam, zmień też tu. */
+/* napój: [kcal/100 ml, cukier/100 ml, alkohol, sok 100%, słodki] */
+var TZ_DR = { kawa: [2, 0], mleko: [50, 0], sok: [45, 9, 0, 1], slodki: [42, 10.6, 0, 0, 1], nektar: [50, 11, 0, 0, 1], energ: [45, 11, 0, 0, 1], piwo: [43, 0, 1], wino: [83, 0, 1] };
 var TZ_VEG = { warzywa: 1, owoce: 1, straczki: 1 };
 var TZC = {};
 function tzGet(k) { try { return JSON.parse(localStorage.getItem("talerz:" + k)); } catch (e) { return null; } }
 function tzReset() { TZC = {}; }
 function tzProf() { if (!("$p" in TZC)) TZC.$p = tzGet("profile"); return TZC.$p; }
 function tzWaterGoal(steps) { var p = tzProf(); if (p && +p.waterGoal) return +p.waterGoal; var w = p && +p.weight || 70, b = Math.max(0, (steps || 0) - 4000) / 2000 * 100; return Math.round(Math.max(1500, Math.min(3500, w * 30 + b)) / 50) * 50; }
-/* podsumowanie dnia z Talerza: płyny, warzywa, cukier, kalorie, limit, kroki */
+/* dzienna norma białka – jak w Talerzu: 1,6 g na kg (przy odchudzaniu liczone od średniej z wagi i celu) */
+function tzProtT() { var p = tzProf(), w = p && +p.weight || 0; if (!w) return 100; return Math.round(1.6 * Math.min(w, (p.goal && +p.goal < w) ? (+p.goal + w) / 2 : w)); }
+/* podsumowanie dnia z Talerza: płyny, warzywa, cukier, kalorie (z napojami), białko, limit, kroki */
 function tz(k) {
   if (k in TZC) return TZC[k];
   var d = tzGet("day-" + k), r = null;
   if (d && ((d.meals || []).length || (d.drinks || []).length || d.steps || d.extra)) {
     var cust = {}; ((tzProf() || {}).customDrinks || []).forEach(function (c) { cust[c.k] = c; });
-    var ml = 0, kcal = 0, sug = 0, veg = 0, p = 0;
-    (d.drinks || []).forEach(function (x) { var t = x.type || "woda", v = +x.ml || 0, c = cust[t], df = c ? [+c.kcal || 0, +c.sug || 0, c.alc ? 1 : 0] : (TZ_DR[t] || [0, 0, 0]); if (!df[2]) ml += v; kcal += df[0] * v / 100; sug += df[1] * v / 100; });
-    (d.meals || []).forEach(function (m) { kcal += +m.kcal || 0; p += +m.p || 0; (m.items || []).forEach(function (x) { if (TZ_VEG[x.cat]) veg += +x.grams || 0; sug += +x.sug || 0; }); });
-    r = { ml: Math.round(ml), wg: tzWaterGoal(d.steps), veg: Math.round(veg), sug: Math.round(sug), kcal: Math.round(kcal), p: Math.round(p), lim: d.limit ? Math.round(d.limit) : null, steps: +d.steps || 0, ex: +d.extra || 0, meals: (d.meals || []).length, names: (d.meals || []).map(function (m) { return m.name; }).filter(Boolean) };
+    var ml = 0, dk = 0, ds = 0, sw = 0, jui = 0, alc = 0, kcal = 0, sug = 0, veg = 0, pr = 0, cb = 0, ft = 0, late = 0, ML = [];
+    (d.drinks || []).forEach(function (x) {
+      var t = x.type || "woda", v = +x.ml || 0, c = cust[t], df = c ? [+c.kcal || 0, +c.sug || 0, c.alc ? 1 : 0, 0, !c.alc && +c.sug >= 2.5 ? 1 : 0] : (TZ_DR[t] || [0, 0]);
+      if (df[2]) alc += v; else ml += v; dk += df[0] * v / 100; ds += df[1] * v / 100; if (df[4]) sw += v; if (df[3]) jui += v;
+    });
+    if (jui > 150) sw += jui - 150;
+    (d.meals || []).forEach(function (m) {
+      kcal += +m.kcal || 0; pr += +m.p || 0; cb += +m.c || 0; ft += +m.f || 0; if (m.time && m.time >= "20:00") late++;
+      (m.items || []).forEach(function (x) { if (TZ_VEG[x.cat]) veg += +x.grams || 0; sug += +x.sug || 0; });
+      ML.push((m.time ? m.time + " " : "") + (m.name || "posiłek") + " " + Math.round(+m.kcal || 0) + " kcal (B" + Math.round(+m.p || 0) + " W" + Math.round(+m.c || 0) + " T" + Math.round(+m.f || 0) + ")");
+    });
+    r = { ml: Math.round(ml), wg: tzWaterGoal(d.steps), veg: Math.round(veg), sug: Math.round(sug + ds), kcal: Math.round(kcal + dk), dk: Math.round(dk), p: Math.round(pr), c: Math.round(cb + ds), f: Math.round(ft),
+      lim: d.limit ? Math.round(d.limit) : null, steps: +d.steps || 0, ex: +d.extra || 0, meals: (d.meals || []).length, sw: Math.round(sw), alc: Math.round(alc), late: late, ML: ML,
+      names: (d.meals || []).map(function (m) { return m.name; }).filter(Boolean) };
   }
   return (TZC[k] = r);
 }
 function tzWeights() { var p = tzProf(); return (p && p.weights || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }); }
+function kgf(v) { return String(Math.round(v * 10) / 10).replace(".", ","); }
+/* trend wagi: średnia z 7 dni i tempo (prosta dopasowana do wpisów z 28 dni) – jak na wykresie w Jedzeniu */
+function tzTrend() {
+  var all = tzWeights(); if (!all.length) return null;
+  function tt(w) { return k2d(w.date).getTime(); }
+  var t1 = tt(all[all.length - 1]), w28 = all.filter(function (w) { return t1 - tt(w) <= 28 * 864e5; }), w7 = all.filter(function (w) { return t1 - tt(w) < 7 * 864e5; });
+  var r = { avg7: w7.reduce(function (s, w) { return s + +w.kg; }, 0) / w7.length, rate: null, eta: null, goal: +((tzProf() || {}).goal) || null };
+  if (w28.length >= 3 && (t1 - tt(w28[0])) / 864e5 >= 7) {
+    var xs = w28.map(function (w) { return (tt(w) - t1) / (7 * 864e5); }), ys = w28.map(function (w) { return +w.kg; }), mx = 0, my = 0, nu = 0, de = 0, i;
+    for (i = 0; i < xs.length; i++) { mx += xs[i] / xs.length; my += ys[i] / ys.length; }
+    for (i = 0; i < xs.length; i++) { nu += (xs[i] - mx) * (ys[i] - my); de += (xs[i] - mx) * (xs[i] - mx); }
+    if (de > 0) r.rate = nu / de;
+  }
+  if (r.goal && r.rate && Math.abs(r.rate) >= 0.05 && (r.goal - r.avg7) / r.rate > 0) r.eta = Math.ceil((r.goal - r.avg7) / r.rate);
+  return r;
+}
+function trendTxt(r) { if (!r) return ""; return (r.rate == null ? "📊" : r.rate < -0.05 ? "📉" : r.rate > 0.05 ? "📈" : "➡️") + " Średnia 7 dni: " + kgf(r.avg7) + " kg" + (r.rate != null ? " · tempo " + (r.rate > 0 ? "+" : "") + kgf(r.rate) + " kg/tydz." + (r.eta ? " · cel za ok. " + r.eta + " tyg." : "") : " · tempo pojawi się po tygodniu ważenia"); }
+function pl(n, a, b, c) { return n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c; }
+function litr(ml) { return (Math.round(ml / 100) / 10).toFixed(1).replace(".", ",") + " l"; }
 /* nawyki zaliczane automatycznie: [nazwa, jednostka, kierunek (1 – im więcej tym lepiej, -1 – im mniej), wartość, domyślne progi Mini/Plus/Elita] */
 var TZM = {
   water: ["💧 Woda i płyny", "ml", 1, function (t) { return t.ml; }, [1000, 1500, 2000]],
   veg: ["🥦 Warzywa i owoce", "g", 1, function (t) { return t.veg; }, [100, 250, 400]],
+  protein: ["🥩 Białko (% dziennej normy)", "% normy", 1, function (t) { return Math.round(t.p / tzProtT() * 100); }, [50, 75, 100]],
   steps: ["👟 Kroki", "kroków", 1, function (t) { return t.steps; }, [4000, 7000, 10000]],
   sugar: ["🍬 Cukry wolne (najwyżej)", "g", -1, function (t) { return t.sug; }, [50, 30, 15]],
   log: ["🍽️ Jedzenie zapisane i w limicie", "", 0, null, null]
 };
 var TZDEF = [["w8", "water"], ["w7", "veg"], ["w3", "steps"]];
 function tzLinksInit() {
-  if (S.lk) return;
-  S.lk = {}; TZDEF.forEach(function (x) { if (H.some(function (h) { return h[0] === x[0]; })) S.lk[x[0]] = { m: x[1], t: TZM[x[1]][4].slice() }; }); sv();
+  var ch = false;
+  if (!S.lk) { S.lk = {}; TZDEF.forEach(function (x) { if (H.some(function (h) { return h[0] === x[0]; })) S.lk[x[0]] = { m: x[1], t: TZM[x[1]][4].slice() }; }); ch = true; }
+  if (!S.set.lkp) { /* 4.1: nawyk z białkiem zalicza się sam */
+    S.set.lkp = 1; ch = true;
+    var hb = H.filter(function (h) { return /białk/i.test(h[2]) && !S.lk[h[0]]; })[0];
+    if (hb) S.lk[hb[0]] = { m: "protein", t: TZM.protein[4].slice() };
+  }
+  if (ch) sv();
 }
 function autoLv(k, id) {
   var L = S.lk && S.lk[id], M = L && TZM[L.m]; if (!M) return 0;
   var t = tz(k); if (!t) return 0;
   if (L.m === "log") return t.meals >= 3 && t.lim && t.kcal <= t.lim ? 3 : t.meals >= 3 ? 2 : t.meals ? 1 : 0;
+  if (L.m === "protein" && !t.meals) return 0;
   var v = M[3](t), q = L.t || M[4];
   if (M[2] < 0) { if (!t.meals) return 0; return v <= q[2] ? 3 : v <= q[1] ? 2 : v <= q[0] ? 1 : 0; }
   return v >= q[2] ? 3 : v >= q[1] ? 2 : v >= q[0] ? 1 : 0;
 }
 function autoTxt(k, id) {
   var L = S.lk && S.lk[id], M = L && TZM[L.m]; if (!M) return "";
-  var t = tz(k) || { ml: 0, veg: 0, steps: 0, sug: 0, meals: 0, kcal: 0, lim: null };
+  var t = tz(k) || { ml: 0, veg: 0, steps: 0, sug: 0, meals: 0, kcal: 0, p: 0, lim: null };
   if (L.m === "log") return "⚡ posiłki: " + t.meals + (t.lim ? " · " + t.kcal + "/" + t.lim + " kcal" : "");
   var q = L.t || M[4], v = M[3](t);
   if (M[2] < 0) return "⚡ " + v + " " + M[1] + (t.meals ? "" : " (brak posiłków)") + " · Elita ≤ " + q[2];
   var nx = v < q[0] ? ["Mini", q[0]] : v < q[1] ? ["Plus", q[1]] : v < q[2] ? ["Elita", q[2]] : null;
+  if (L.m === "protein") { var pT = tzProtT(); return "⚡ " + t.p + "/" + pT + " g białka" + (nx ? " · do " + nx[0] + ": " + Math.max(1, Math.ceil(nx[1] * pT / 100 - t.p)) + " g" : " ✓"); }
   return "⚡ " + v.toLocaleString("pl-PL") + " " + M[1] + (nx ? " · do " + nx[0] + ": " + (nx[1] - v).toLocaleString("pl-PL") : " ✓");
 }
-/* poziomy dnia z uwzględnieniem automatycznych */
+
+/* ---------- cel żywieniowy tygodnia (mierzony z danych Jedzenia) ---------- */
+var WG = {
+  veg: ["🥦 400 g warzyw i owoców", function (t) { return t.veg >= 400; }],
+  water: ["💧 Cel płynów", function (t) { return t.ml >= t.wg; }],
+  protein: ["🥩 Białko w normie", function (t) { return t.p >= tzProtT() * 0.9; }],
+  sugar: ["🍬 Cukry wolne najwyżej 30 g", function (t) { return t.meals > 0 && t.sug <= 30; }],
+  nosweet: ["🥤 Bez słodkich napojów", function (t) { return t.meals > 0 && !t.sw; }],
+  limit: ["🎯 Kalorie w limicie (min. 3 posiłki)", function (t) { return t.meals >= 3 && t.lim && t.kcal <= t.lim; }],
+  late: ["🌙 Bez jedzenia po 20:00", function (t) { return t.meals > 0 && !t.late; }],
+  steps: ["👟 8000 kroków", function (t) { return t.steps >= 8000; }]
+};
+function monKey(d) { d = new Date(d || new Date()); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return key(d); }
+function wgDays(wk) { var a = [], d = k2d(wk); for (var i = 0; i < 7; i++) { var x = new Date(d); x.setDate(d.getDate() + i); a.push(key(x)); } return a; }
+function wgDone(g, k) { var t = tz(k); return !!(t && WG[g] && WG[g][1](t)); }
+function wgCount(w) { var td = key(new Date()); return wgDays(w.wk).filter(function (k) { return k <= td && wgDone(w.g, k); }).length; }
+function wgInit() {
+  var mk = monKey();
+  if (S.wg && !WG[S.wg.g]) S.wg = null;
+  if (S.wg && S.wg.wk !== mk) { /* nowy tydzień: zapisz wynik i zostań przy tym samym celu */
+    var o = S.wg; o.done = wgCount(o); S.wgh = (S.wgh || []).concat([o]).slice(-26); S.wg = { wk: mk, g: o.g, n: o.n }; sv();
+  }
+}
+function wgDots(w) {
+  var td = key(new Date());
+  return '<div class="wgd">' + wgDays(w.wk).map(function (k, i) { var c = k > td ? "" : wgDone(w.g, k) ? " on" : k === td ? " td" : " no"; return '<span class="d' + c + '" title="' + dshort(k) + '">' + ["P", "W", "Ś", "C", "P", "S", "N"][i] + "</span>"; }).join("") + "</div>";
+}
+function wgLine() {
+  if (!S.wg) return '<div class="wgl"><button class="lnk" data-a="wgset">🎯 Wybierz cel żywieniowy na ten tydzień ›</button></div>';
+  var c = wgCount(S.wg);
+  return '<div class="wgl"><span>🎯 <b>' + WG[S.wg.g][0] + "</b> · " + c + "/" + S.wg.n + " " + pl(S.wg.n, "dzień", "dni", "dni") + (c >= S.wg.n ? " ✅" : "") + '</span><button class="lnk" data-a="wgset">Zmień</button></div>' + wgDots(S.wg);
+}
+function wgSheet() {
+  var cur = S.wg || { g: "", n: 5 }, h = '<div class="note" style="margin-bottom:8px">Jeden mały cel na tydzień działa lepiej niż pilnowanie wszystkiego naraz. Postęp liczy się sam z danych Jedzenia.</div>';
+  h += Object.keys(WG).map(function (g) { return '<button class="opt' + (cur.g === g ? " on" : "") + '" data-a="wgpick" data-id="' + g + '">' + WG[g][0] + "</button>"; }).join("");
+  h += '<div class="note" style="margin:12px 0 6px">Ile dni w tygodniu?</div><div class="btns">' + [3, 4, 5, 6, 7].map(function (n) { return '<button class="' + (cur.n === n ? "pri" : "sec") + ' sm" data-a="wgn" data-id="' + n + '">' + n + "</button>"; }).join("") + "</div>";
+  var hi = (S.wgh || []).slice(-4).reverse();
+  if (hi.length) h += '<div class="note" style="margin-top:12px"><b>Poprzednie tygodnie</b><br>' + hi.map(function (w) { return dshort(w.wk) + ": " + (WG[w.g] ? WG[w.g][0] : w.g) + " – " + w.done + "/" + w.n + (w.done >= w.n ? " ✅" : ""); }).join("<br>") + "</div>";
+  if (S.wg) h += '<button class="lnk" data-a="wgoff" style="margin-top:10px">Bez celu w tym tygodniu</button>';
+  openSheet("🎯 Cel żywieniowy tygodnia", h, function () { render(); });
+}
+
+/* ---------- wieczorny bilans i ochrona serii ---------- */
+function evGaps(k) {
+  var t = tz(k) || { ml: 0, wg: tzWaterGoal(0), veg: 0, sug: 0, kcal: 0, p: 0, lim: null, steps: 0, meals: 0 }, a = [], pT = tzProtT();
+  if (!t.meals) a.push(["🍽️", "Brak zapisanych posiłków – dodaj je, żeby bilans był pełny", "brak posiłków"]);
+  else if (t.lim) { var rem = t.lim - t.kcal; a.push(rem >= 0 ? ["🔥", "Zostało " + rem + " kcal" + (rem >= 300 ? " – starczy na normalną kolację" : rem >= 120 ? " – na lekką kolację lub przekąskę" : ""), "zostało " + rem + " kcal"] : ["🔥", "Ponad limit o " + (-rem) + " kcal – nic się nie stało, jutro zwykły dzień, bez głodzenia", "ponad limit o " + (-rem) + " kcal"]); }
+  if (t.ml < t.wg) { var gl = Math.ceil((t.wg - t.ml) / 250); a.push(["💧", "Brakuje " + litr(t.wg - t.ml) + " płynów (ok. " + gl + " " + pl(gl, "szklanka", "szklanki", "szklanek") + ")", litr(t.wg - t.ml) + " płynów"]); }
+  if (t.meals && t.veg < 400) a.push(["🥦", "Brakuje " + (400 - t.veg) + " g warzyw lub owoców – np. surówka albo owoc do kolacji", (400 - t.veg) + " g warzyw"]);
+  if (t.meals && t.p < pT * 0.9) a.push(["🥩", "Białko " + t.p + "/" + pT + " g – dorzuć twaróg, jajka, rybę, kefir lub strączki", (pT - t.p) + " g białka"]);
+  if (t.sug > 30) a.push(["🍬", "Cukry wolne " + t.sug + " g (maks. 30 g) – wieczorem już bez słodyczy", ""]);
+  var sl = Object.keys(S.lk || {}).map(function (id) { return S.lk[id]; }).filter(function (l) { return l.m === "steps"; })[0], sg = sl ? (sl.t || TZM.steps[4])[1] : 7000;
+  if (!t.steps) a.push(["👟", "Wpisz dzisiejsze kroki z telefonu lub zegarka", ""]);
+  else if (t.steps < sg) a.push(["👟", "Do " + sg.toLocaleString("pl-PL") + " kroków brakuje " + (sg - t.steps).toLocaleString("pl-PL") + " – wystarczy krótki spacer", (sg - t.steps).toLocaleString("pl-PL") + " kroków"]);
+  return a;
+}
+function atRisk(k) { return H.filter(function (y) { return lvl(k, y[0]) === 0; }).map(function (y) { return [y, hStreak(y[0])]; }).filter(function (x) { return x[1] >= 3; }).sort(function (a, b) { return b[1] - a[1]; }); }
+function hmMin(t) { var q = pt(t); return q ? q[0] * 60 + q[1] : null; }
+function evNow() { var q = hmMin(S.set.ev.t), n = new Date(); return !!(S.set.ev.on && q != null && n.getHours() * 60 + n.getMinutes() >= q); }
+function evNote(k) {
+  tzReset(); var g = evGaps(k), miss = g.filter(function (x) { return x[2] && x[0] !== "🔥" && x[0] !== "🍽️"; }).map(function (x) { return x[2]; }), kc = g.filter(function (x) { return x[0] === "🔥" || x[0] === "🍽️"; })[0], r = atRisk(k), b = [];
+  if (kc) b.push(kc[2].charAt(0).toUpperCase() + kc[2].slice(1));
+  if (miss.length) b.push("brakuje: " + miss.join(", "));
+  if (r.length) b.push("🔥 " + r.length + " " + pl(r.length, "seria", "serie", "serii") + " do ochrony");
+  if (dLv(k) === 0) b.push("📔 pytania dnia czekają");
+  return b.length ? b.join(" · ") : "Jedzenie, płyny i ruch w normie – świetny dzień ✅";
+}
+function evCard(k) {
+  if (off !== 0 || !evNow()) return "";
+  var g = evGaps(k), r = atRisk(k), L = LL(k), done = H.filter(function (y) { return L[y[0]]; }).length;
+  var h = '<div class="card ev"><h3>🌆 Wieczorny bilans</h3>';
+  if (!g.length) h += '<div class="evl"><i>✅</i><span>Jedzenie, płyny i ruch w normie – dobra robota!</span></div>';
+  g.forEach(function (x) { h += '<div class="evl"><i>' + x[0] + "</i><span>" + esc(x[1]) + "</span></div>"; });
+  h += '<div class="evl"><i>✅</i><span>Nawyki: ' + done + "/" + H.length + " zaliczone dziś</span></div>";
+  if (r.length) h += '<div class="evl"><i>🔥</i><span>Nie przerwij serii – wystarczy Mini: ' + r.slice(0, 4).map(function (x) { return "<b>" + esc(x[0][2]) + "</b> (" + x[1] + " " + pl(x[1], "dzień", "dni", "dni") + ")"; }).join(", ") + "</span></div>";
+  if (dLv(k) === 0) h += '<div class="evl"><i>📔</i><span>Pamiętnik: odpowiedz na pytania dnia – wystarczy jedno zdanie</span></div>';
+  h += hasAI() ? '<div class="btns" style="margin-top:10px"><button class="pri sm" data-a="tmrw">🧭 Co zjeść jutro?</button></div>' : '<div class="note" style="margin-top:8px">Dodaj klucz AI w Ustawieniach, a mentor zaproponuje jadłospis na jutro.</div>';
+  return h + "</div>";
+}
+function on(m) { return !!(S.set.mod && S.set.mod[m]); }
+function v41Init() {
+  var ch = false;
+  if (!S.set.ev) { S.set.ev = { on: 1, t: "18:00" }; ch = true; }
+  if (!S.set.sp) { S.set.sp = { on: 1, t: "21:00" }; ch = true; }
+  if (!S.set.mod) { S.set.mod = { fast: 0, ryt: 0, proj: 0 }; ch = true; }
+  if (ch) sv();
+  wgInit();
+}
 function LL(k) { var l = S.l[k] || {}, o = {}, id; for (id in l) o[id] = l[id]; if (S.lk) for (id in S.lk) { var a = autoLv(k, id); if (a > (o[id] || 0)) o[id] = a; } return o; }
 function lvl(k, id) { return Math.max((S.l[k] || {})[id] || 0, autoLv(k, id)); }
 function cats(k) { var m = { z: 0, m: 0, r: 0, d: 0 }, l = LL(k); H.forEach(function (h) { var v = l[h[0]] || 0; if (m[h[1]] != null && v > m[h[1]]) m[h[1]] = v; }); return m; }
@@ -233,26 +361,28 @@ function diaryCard(k) {
   if (es.length) h += '<div style="margin-top:6px">' + es.map(entryHtml).join("") + "</div>";
   h += '<details style="margin-top:10px"' + (S.set.col.pq ? "" : " open") + ' data-col="pq"><summary>❓ Pytania dnia <span class="note">(' + dAns(k) + '/3 · trzy odpowiedzi = Plus)</span></summary>';
   qs.forEach(function (q, i) { h += '<label class="note" style="font-size:13px;color:var(--tx);margin-top:8px">' + esc(q) + '</label><div class="tw"><textarea id="pa' + i + '" data-f="pa" data-k="' + k + '" data-i="' + i + '" style="min-height:56px;padding-right:52px">' + esc(pa.a[i] || "") + '</textarea>' + micBtn("pa" + i) + '</div>'; });
-  if (hasAI()) h += '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="mq" data-k="' + k + '">✨ Pytanie od mentora</button></div>';
+  if (pa.m) h += '<div class="ai think"><b>🧠 Mentor o Twoich odpowiedziach</b>' + md(pa.m) + "</div>";
+  if (hasAI()) h += '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="mq" data-k="' + k + '">✨ Pytanie od mentora</button><button class="sec sm" data-a="think" data-k="' + k + '"' + (dAns(k) || (S.n[k] || "").trim() ? "" : " disabled") + ">🧠 " + (pa.m ? "Nowa podpowiedź" : "Podpowiedź mentora") + "</button></div>";
   h += '</details><div class="note" style="margin-top:6px">Pamiętnik też ma poziomy: Mini – coś zapisane, Plus – 3 odpowiedzi lub ok. 150 znaków, Elita – 500+ znaków. Seria: ' + dStreak() + ' dni.</div></div>';
   return h;
 }
 function foodCard(k) {
   var t = tz(k), pr = tzProf();
-  if (!pr && !t) return '<div class="card food"><div class="fh"><b>🍽️ Jedzenie</b><button class="sec sm" data-a="tab" data-id="jedz">Otwórz</button></div><div class="note">Licz kalorie ze zdjęć, pij wodę i zapisuj kroki w zakładce 🍽️ Jedzenie – woda, warzywa i kroki zaliczą się tu jako nawyki ⚡.</div></div>';
-  t = t || { ml: 0, wg: tzWaterGoal(0), veg: 0, sug: 0, kcal: 0, lim: null, steps: 0, meals: 0 };
+  if (!pr && !t) return '<div class="card food"><div class="fh"><b>🍽️ Jedzenie</b><button class="sec sm" data-a="tab" data-id="jedz">Otwórz</button></div><div class="note">Licz kalorie ze zdjęć, pij wodę i zapisuj kroki w zakładce 🍽️ Jedzenie – woda, warzywa, białko i kroki zaliczą się tu jako nawyki ⚡.</div></div>';
+  t = t || { ml: 0, wg: tzWaterGoal(0), veg: 0, sug: 0, kcal: 0, dk: 0, p: 0, lim: null, steps: 0, meals: 0 };
   function pc(v, g) { return Math.max(0, Math.min(100, g ? v / g * 100 : 0)); }
-  var over = t.lim && t.kcal > t.lim, h = '<div class="card food"><div class="fh"><b>🍽️ Jedzenie' + (off ? " · " + dshort(k) : "") + '</b><button class="lnk" data-a="tab" data-id="jedz">Szczegóły ›</button></div><div class="fg">';
-  h += '<div class="fm"><span>🔥 Kalorie</span><b' + (over ? ' style="color:var(--red)"' : "") + '>' + t.kcal + (t.lim ? "<small> / " + t.lim + "</small>" : "") + '</b><div class="bar"><i style="width:' + pc(t.kcal, t.lim) + "%" + (over ? ";background:var(--red)" : "") + '"></i></div></div>';
+  var pT = tzProtT(), over = t.lim && t.kcal > t.lim, h = '<div class="card food"><div class="fh"><b>🍽️ Jedzenie' + (off ? " · " + dshort(k) : "") + '</b><button class="lnk" data-a="tab" data-id="jedz">Szczegóły ›</button></div>';
+  h += '<div class="fm fk"><span>🔥 Kalorie' + (t.dk ? " <small>(w tym napoje " + t.dk + " kcal)</small>" : "") + '</span><b' + (over ? ' style="color:var(--red)"' : "") + ">" + t.kcal + (t.lim ? "<small> / " + t.lim + " kcal</small>" : "<small> kcal</small>") + '</b><div class="bar"><i style="width:' + pc(t.kcal, t.lim) + "%" + (over ? ";background:var(--red)" : "") + '"></i></div></div><div class="fg">';
   h += '<div class="fm"><span>💧 Płyny</span><b>' + (t.ml / 1000).toFixed(1).replace(".", ",") + "<small> / " + (t.wg / 1000).toFixed(1).replace(".", ",") + ' l</small></b><div class="bar"><i style="width:' + pc(t.ml, t.wg) + '%"></i></div></div>';
   h += '<div class="fm"><span>🥦 Warzywa</span><b>' + t.veg + '<small> / 400 g</small></b><div class="bar"><i style="width:' + pc(t.veg, 400) + '%"></i></div></div>';
+  h += '<div class="fm"><span>🥩 Białko</span><b>' + t.p + "<small> / " + pT + ' g</small></b><div class="bar"><i style="width:' + pc(t.p, pT) + '%"></i></div></div>';
   h += '<div class="fm"><span>👟 Kroki</span><b>' + t.steps.toLocaleString("pl-PL") + '</b><div class="bar"><i style="width:' + pc(t.steps, 10000) + '%"></i></div></div></div>';
   if (t.sug > 30) h += '<div class="note" style="margin-top:6px">🍬 Cukry wolne: ' + t.sug + " g (zalecane maks. 30 g)</div>";
-  if (off === 0) h += '<div class="btns" style="margin-top:10px"><button class="pri sm" data-a="tzgo" data-id="posilek">📷 Posiłek</button><button class="sec sm" data-a="tzgo" data-id="woda">💧 Woda</button><button class="sec sm" data-a="tzgo" data-id="kroki">👟 Kroki</button></div>';
+  if (off === 0) h += wgLine() + '<div class="btns" style="margin-top:10px"><button class="pri sm" data-a="tzgo" data-id="posilek">📷 Posiłek</button><button class="sec sm" data-a="tzgo" data-id="woda">💧 Woda</button><button class="sec sm" data-a="tzgo" data-id="kroki">👟 Kroki</button></div>';
   return h + "</div>";
 }
 function nextSteps() {
-  var a = [];
+  var a = []; if (!on("proj")) return a;
   S.pj.forEach(function (p) { if (p.status !== "doing") return; var s = (p.steps || []).find(function (x) { return !x.done; }); if (s) a.push([p, s]); });
   return a.slice(0, 3);
 }
@@ -288,7 +418,7 @@ function cardEd(i) {
   var x = '<div class="card"><h3>' + CATS[i][1] + " " + CATS[i][0] + "</h3>";
   H.forEach(function (y) {
     if (y[1] !== i) return; var id = y[0];
-    x += '<div class="ed">' + inp(id, "2", y[2], "Nazwa nawyku") + inp(id, "3", y[3], "Pora (opcjonalnie)") + inp(id, "4", y[4], "Twój próg Mini") + inp(id, "5", y[5], "Twój próg Plus") + inp(id, "6", y[6], "Twój próg Elita") +
+    x += '<div class="ed">' + inp(id, "2", y[2], "Nazwa nawyku") + inp(id, "3", y[3], "Pora lub kotwica, np. po porannej kawie") + inp(id, "4", y[4], "Twój próg Mini") + inp(id, "5", y[5], "Twój próg Plus") + inp(id, "6", y[6], "Twój próg Elita") +
       '<input data-f="7" data-id="' + id + '" value="' + esc(y[7] || "") + '" placeholder="Przypomnienie o godzinie, np. 07:00 (opcjonalnie)">' + linkEd(id) +
       '<div class="btns"><button class="sec" data-a="up" data-id="' + id + '">↑</button><button class="sec" data-a="dn" data-id="' + id + '">↓</button><select data-f="1" data-id="' + id + '">' +
       Object.keys(CATS).map(function (c) { return '<option value="' + c + '"' + (c === i ? " selected" : "") + ">" + CATS[c][0] + "</option>"; }).join("") +
@@ -306,6 +436,7 @@ function dzis() {
   h += '<div class="chips">'; for (var i in CATS) h += '<div class="chip">' + CATS[i][1] + "<b>" + LV[c[i]] + "</b>" + CATS[i][0] + "</div>";
   h += '<div class="chip">📔<b>' + LV[dLv(k)] + "</b>Pamiętnik</div></div>";
   if (ed) { for (var j in CATS) h += cardEd(j); h += quotesEd(); h += '<div class="btns c" style="margin-bottom:12px"><button class="pri" data-a="ed">✓ Gotowe</button></div>'; return h; }
+  h += evCard(k);
   h += foodCard(k);
   h += diaryCard(k);
   if (off === 0) h += focusCard();
@@ -512,6 +643,8 @@ function foodWeek() {
   h += '<div class="st"><b>' + W.filter(function (t) { return t.ml >= t.wg; }).length + '/7</b><span>dni z celem płynów</span></div>';
   h += '<div class="st"><b>' + avg(L, function (t) { return t.veg; }) + ' g</b><span>średnio warzyw i owoców</span></div>';
   h += '<div class="st"><b>' + avg(W, function (t) { return t.steps; }).toLocaleString("pl-PL") + '</b><span>średnio kroków</span></div></div>';
+  h += '<div style="margin-top:10px">' + wgLine() + "</div>";
+  var tr = tzTrend(); if (tr) h += '<div class="note" style="margin-top:8px">' + trendTxt(tr) + "</div>";
   var ws = tzWeights(), a = ws.filter(function (w) { return w.date >= key(ago(30)); });
   if (a.length > 1) { var dv = Math.round((a[a.length - 1].kg - a[0].kg) * 10) / 10; h += '<div class="note" style="margin-top:8px">⚖️ Waga w 30 dni: ' + String(a[0].kg).replace(".", ",") + " → " + String(a[a.length - 1].kg).replace(".", ",") + " kg (" + (dv > 0 ? "+" : "") + String(dv).replace(".", ",") + " kg)</div>"; }
   return h + '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="tzgo" data-id="historia">📊 Historia w Jedzeniu</button></div></div>';
@@ -767,9 +900,11 @@ var TONES = { trener: ["💪 Wymagający trener", "Jesteś wymagającym trenerem
   spok: ["🕊️ Spokojny towarzysz", "Jesteś spokojnym, refleksyjnym towarzyszem: mówisz łagodnie, bez presji, pomagasz dostrzec sens i małe kroki."] };
 function sysPrompt() {
   return "Jesteś osobistym mentorem rozwoju w aplikacji „Nawyki i Talerz”. " + TONES[S.set.tone][1] +
-    " System użytkownika: każdy nawyk ma poziomy Mini (lina ratunkowa, poniżej 2 minut), Plus i Elita. W 4 kategoriach (Zdrowie, Umysł, Relacje, Duch) liczy się najwyższy poziom dnia, maks. 12 pkt. Zasada: nigdy dwa dni „Brak” pod rząd. Prowadzi też pamiętnik, post przerywany, cele i projekty." +
+    " System użytkownika: każdy nawyk ma poziomy Mini (lina ratunkowa, poniżej 2 minut), Plus i Elita. W 4 kategoriach (Zdrowie, Umysł, Relacje, Duch) liczy się najwyższy poziom dnia, maks. 12 pkt. Zasada: nigdy dwa dni „Brak” pod rząd. Prowadzi też pamiętnik z trzema pytaniami dnia, cele" + (on("fast") ? ", post przerywany" : "") + (on("proj") ? ", projekty" : "") + "." +
     " Pisz po polsku, zwracaj się na „Ty”. Opieraj się na danych i podawaj konkretne obserwacje (dni, liczby, cytaty z pamiętnika). Szukaj wzorców i powiązań między nawykami, samopoczuciem i notatkami. Proponuj małe, wykonalne kroki zgodne z filozofią Mini/Plus/Elita. Gdy czegoś nie wiesz – zapytaj." +
     " Masz też dane z modułu Jedzenie (licznik kalorii Talerz): kalorie zjedzone i dzienny limit na odchudzanie, płyny, warzywa i owoce (cel 400 g), cukry wolne (maks. 30 g), kroki, trening i wagę. Łącz je z nawykami i samopoczuciem, ale nie zachęcaj do głodzenia się ani skrajnych diet." +
+    " Gdy pytam, co zjeść jutro, albo proszę o jadłospis: najpierw w 2–3 punktach oceń moje ostatnie dni (czego brakowało, czego było za dużo – kalorie, białko, warzywa, cukier, słodkie napoje, alkohol, późne jedzenie). Potem podaj plan na jutro z nagłówkami Śniadanie, Drugie śniadanie lub przekąska, Obiad, Kolacja – przy każdym daniu przybliżone kcal i białko, a na końcu sumę. Suma ma wypaść blisko mojego dziennego limitu (nie mniej niż ok. 85% limitu), z białkiem w normie i 400 g warzyw i owoców. Opieraj się na daniach i produktach, które już jem (historia posiłków i ulubione), na prostej polskiej kuchni i tanich produktach; zmieniaj tylko to, co poprawi bilans. Zakończ krótką listą zakupów." +
+    " Czytając pamiętnik i odpowiedzi na pytania dnia, pomagaj mi kształtować zdrowe myślenie: doceniaj to, co dobre, łagodnie nazywaj pułapki myślenia (wszystko albo nic, katastrofizowanie, czytanie w myślach, „muszę/powinienem”, surowa samokrytyka, porównywanie się), proponuj realistyczne i życzliwe spojrzenie, wdzięczność i skupienie na tym, na co mam wpływ. Nie zastępujesz terapeuty: jeśli w zapiskach widać długotrwały smutek, beznadzieję lub myśli o zrobieniu sobie krzywdy, ciepło zachęć do rozmowy z bliską osobą lub specjalistą (w Polsce bezpłatny telefon zaufania 116 123, w nagłej sytuacji 112)." +
     " Szanuj wartości i przekonania użytkownika, w tym duchowe. Nie stawiaj diagnoz medycznych; przy niepokojących sygnałach zdrowotnych lub psychicznych zachęć do kontaktu ze specjalistą. Używaj prostego formatowania: krótkie akapity, listy z „- ”, pogrubienia **tak**.";
 }
 function ctx(nd) {
@@ -786,16 +921,25 @@ function ctx(nd) {
   for (var i = nd - 1; i >= 0; i--) {
     var k = key(ago(i)), line = k + " " + ["nd", "pn", "wt", "śr", "cz", "pt", "sb"][k2d(k).getDay()] + ":";
     if (sh.h) { var l = LL(k), z = Object.keys(l).filter(function (x) { return l[x] && codes[x]; }).map(function (x) { return codes[x] + "=" + l[x]; }); line += " " + pts(k) + "pkt" + (z.length ? " [" + z.join(" ") + "]" : " [brak]"); var hn = S.hn[k]; if (hn) Object.keys(hn).forEach(function (x) { if (hn[x] && codes[x]) line += " | notatka " + codes[x] + ": " + hn[x]; }); }
-    if (sh.f && FH[k]) line += " | post " + FH[k].toFixed(1) + "h";
+    if (sh.f && on("fast") && FH[k]) line += " | post " + FH[k].toFixed(1) + "h";
     if (sh.t) { var tq = tz(k); if (tq) line += " | jedzenie: " + tq.kcal + (tq.lim ? "/" + tq.lim : "") + " kcal, posiłki: " + tq.meals + (tq.names.length ? " (" + tq.names.slice(0, 6).join(", ").slice(0, 160) + ")" : "") + ", białko " + tq.p + " g, płyny " + tq.ml + "/" + tq.wg + " ml, warzywa " + tq.veg + " g, cukier " + tq.sug + " g, kroki " + tq.steps + (tq.ex ? ", trening " + tq.ex + " kcal" : ""); }
     if (sh.d) { var t = (S.n[k] || "").trim(); if (t) line += " | pamiętnik: " + t.slice(0, 700).replace(/\n+/g, " / ");
       var pa = S.pa[k]; if (pa) { var qs = dayQs(k); pa.a.forEach(function (a, j) { if (a && a.trim()) line += " | " + qs[j] + " → " + a.slice(0, 300); }); }
       dEntries(k).forEach(function (e) { if (e.text) line += " | wpis " + ET[e.ty][1] + " " + hm(e.t) + ": " + e.text.slice(0, 500).replace(/\n+/g, " / "); }); }
     o.push(line);
   }
+  if (sh.t) {
+    var fd7 = []; for (var j = Math.min(nd, 7) - 1; j >= 0; j--) { var kj = key(ago(j)), tj = tz(kj); if (tj && tj.meals) fd7.push(kj + ": " + tj.ML.join("; ") + (tj.dk ? "; napoje " + tj.dk + " kcal" : "") + (tj.sw ? "; słodkie napoje " + tj.sw + " ml" : "") + (tj.alc ? "; alkohol " + tj.alc + " ml" : "")); }
+    if (fd7.length) { o.push("POSIŁKI – SZCZEGÓŁY OSTATNICH DNI (godzina, nazwa, kcal, B/W/T w g):"); fd7.forEach(function (x) { o.push(x.slice(0, 900)); }); }
+    var tfv = (tzProf() || {}).fav || []; if (tfv.length) o.push("ULUBIONE POSIŁKI: " + tfv.slice(0, 15).map(function (m) { return m.name + " (" + Math.round(+m.kcal || 0) + " kcal)"; }).join(", "));
+    o.push("DZIENNA NORMA BIAŁKA: ok. " + tzProtT() + " g; warzywa i owoce: 400 g; cukry wolne: maks. 30 g.");
+    var ttr = tzTrend(); if (ttr) o.push("TREND WAGI: " + trendTxt(ttr).replace(/^\S+\s/, ""));
+    if (S.wg) o.push("CEL ŻYWIENIOWY TYGODNIA: " + WG[S.wg.g][0] + " – " + wgCount(S.wg) + "/" + S.wg.n + " dni (tydzień od " + S.wg.wk + ")");
+    (S.wgh || []).slice(-4).forEach(function (w) { o.push("- poprzedni tydzień od " + w.wk + ": " + (WG[w.g] ? WG[w.g][0] : w.g) + " – " + w.done + "/" + w.n); });
+  }
   if (sh.t) { var tp = tzProf(), ws = tzWeights().filter(function (w) { return w.date >= key(ago(nd)); }); if (tp) o.push("PROFIL JEDZENIA: " + (tp.sex === "k" ? "kobieta" : "mężczyzna") + ", " + tp.age + " lat, " + tp.height + " cm, waga " + tp.weight + " kg" + (tp.goal ? ", cel wagi " + tp.goal + " kg" : "") + (tp.rate ? ", tempo " + tp.rate + " kg/tydz." : "")); if (ws.length) o.push("WAGA: " + ws.map(function (w) { return w.date + " " + w.kg + " kg"; }).join(", ")); }
   if (S.g.length) { o.push("CELE:"); S.g.forEach(function (g) { var r = goalRate(g); o.push("- " + g.name + (g.done ? " (osiągnięty)" : "") + (g.due ? ", termin " + g.due : "") + ", postęp " + (g.pr || 0) + "%" + (r != null ? ", realizacja powiązanych nawyków 30 dni " + r + "%" : "") + (g.note ? ". " + g.note.slice(0, 300) : "")); }); }
-  if (sh.p && S.pj.length) { o.push("POMYSŁY I PROJEKTY:"); S.pj.forEach(function (p) { var s = p.steps || []; o.push("- " + p.name + " [" + ST[p.status][1] + "] kroki " + s.filter(function (x) { return x.done; }).length + "/" + s.length + (p.desc ? ": " + p.desc.slice(0, 200).replace(/\n+/g, " ") : "")); }); }
+  if (sh.p && on("proj") && S.pj.length) { o.push("POMYSŁY I PROJEKTY:"); S.pj.forEach(function (p) { var s = p.steps || []; o.push("- " + p.name + " [" + ST[p.status][1] + "] kroki " + s.filter(function (x) { return x.done; }).length + "/" + s.length + (p.desc ? ": " + p.desc.slice(0, 200).replace(/\n+/g, " ") : "")); }); }
   if (S.fc.length) { o.push("LISTA „DO PRACY” (od mentora):"); S.fc.slice(-12).forEach(function (f) { o.push("- " + f.t + " (dodane " + key(new Date(f.ts)) + ", " + (f.done ? "zrobione" : "w toku") + ")"); }); }
   if (S.rev.length) o.push("POPRZEDNI PRZEGLĄD (" + S.rev[S.rev.length - 1].k + "):\n" + S.rev[S.rev.length - 1].text.slice(0, 1500));
   return o.join("\n");
@@ -811,9 +955,23 @@ function parseList(t, head) {
 }
 function doReview() {
   return run("Mentor analizuje Twój tydzień…", function () {
-    return ai({ sys: sysPrompt(), msgs: [{ r: "u", t: ctx(30) + "\n\nZADANIE: Przygotuj mój przegląd ostatnich 7 dni (porównaj z wcześniejszymi tygodniami). Użyj nagłówków:\n## ✅ Co poszło dobrze\n## ⚠️ Co słabnie\n## 🔍 Wzorce i powiązania\n## 💬 Pytanie do refleksji\n## 🎯 Do pracy\nW sekcji „Do pracy” podaj 1–3 konkretne, mierzalne działania na najbliższy tydzień – każde w osobnej linii zaczynającej się od „- ”. Odnieś się do listy „Do pracy” z poprzednich tygodni (co się udało, co nie). Maks. ok. 350 słów." }] })
+    return ai({ sys: sysPrompt(), msgs: [{ r: "u", t: ctx(30) + "\n\nZADANIE: Przygotuj mój przegląd ostatnich 7 dni (porównaj z wcześniejszymi tygodniami). Użyj nagłówków:\n## ✅ Co poszło dobrze\n## ⚠️ Co słabnie\n## 🔍 Wzorce i powiązania\n" + (S.set.share.t ? "## 🍽️ Jedzenie (jak poszedł cel tygodnia, co poprawić; zaproponuj JEDEN cel na następny tydzień spośród: " + Object.keys(WG).map(function (g) { return WG[g][0].replace(/^\S+\s/, ""); }).join(", ") + ")\n" : "") + (S.set.share.d ? "## 🧠 Myślenie i nastawienie (na podstawie odpowiedzi w pamiętniku: co wspiera, jakie pułapki myślenia się powtarzają, jedno zdrowsze zdanie na tydzień)\n" : "") + "## 💬 Pytanie do refleksji\n## 🎯 Do pracy\nW sekcji „Do pracy” podaj 1–3 konkretne, mierzalne działania na najbliższy tydzień – każde w osobnej linii zaczynającej się od „- ”. Odnieś się do listy „Do pracy” z poprzednich tygodni (co się udało, co nie). Maks. ok. 450 słów." }] })
       .then(function (t) { S.rev.push({ k: key(new Date()), ts: Date.now(), text: t }); sv(); tab = "ment"; render(); window.scrollTo(0, 0); });
   });
+}
+/* pamiętnik → zdrowe myślenie */
+function doThink(k) {
+  return run("Mentor czyta Twój pamiętnik…", function () {
+    var qs = dayQs(k), pa = S.pa[k] || { a: [] }, tx = "MÓJ WPIS Z DNIA " + k + ":\n" + ((S.n[k] || "").trim() ? "Notatka: " + S.n[k].trim() + "\n" : "") +
+      qs.map(function (q, i) { return pa.a[i] && pa.a[i].trim() ? q + " → " + pa.a[i].trim() : ""; }).filter(Boolean).join("\n") +
+      dEntries(k).map(function (e) { return e.text ? "\nWpis " + hm(e.t) + ": " + e.text.slice(0, 600) : ""; }).join("");
+    return ai({ sys: sysPrompt(), msgs: [{ r: "u", t: ctx(14) + "\n\n" + tx + "\n\nZADANIE: Przeczytaj mój dzisiejszy wpis i odpowiedzi na pytania dnia (na tle ostatnich dni) i pomóż mi kształtować zdrowe myślenie. Odnoś się do moich słów, bez ogólników, maks. ok. 130 słów, w punktach:\n- **Co dobrego widzę** – jedna konkretna rzecz z moich odpowiedzi.\n- **Pułapka myślenia** – tylko jeśli naprawdę jest: nazwij ją łagodnie i zacytuj krótki fragment; jeśli jej nie ma, pomiń ten punkt.\n- **Inne spojrzenie** – jedno zdrowsze, realistyczne zdanie, które mogę sobie powiedzieć.\n- **Mały krok na jutro** – jedna rzecz." }] })
+      .then(function (t) { var p = S.pa[k] || { a: ["", "", ""] }; p.m = t; p.mts = Date.now(); S.pa[k] = p; sv(); render(); });
+  });
+}
+function doTmrw() {
+  if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); return; }
+  go("ment"); chatSend("🍽️ Co zjeść jutro? Przeanalizuj moje jedzenie z ostatnich dni i zaproponuj prosty jadłospis.");
 }
 function doMQ(k) {
   return run("Mentor układa pytanie…", function () {
@@ -863,7 +1021,7 @@ function pjAI(mode) {
 function ment() {
   var h = "";
   if (!hasAI()) {
-    h += '<div class="card hl"><b>🧭 Połącz mentora AI</b><p style="font-size:14px;margin:6px 0">Mentor analizuje Twoje nawyki, pamiętnik, jedzenie, posty i projekty, robi przegląd tygodnia, zadaje pytania i pomaga dostrzec, nad czym warto popracować. Potrzebny jest tylko jeden klucz – resztę aplikacja ustawi sama.</p></div>' + keyBox(false) + keyHelp(true);
+    h += '<div class="card hl"><b>🧭 Połącz mentora AI</b><p style="font-size:14px;margin:6px 0">Mentor analizuje Twoje nawyki, pamiętnik i jedzenie, proponuje jadłospis na jutro, robi przegląd tygodnia, zadaje pytania i pomaga dostrzec, nad czym warto popracować. Potrzebny jest tylko jeden klucz – resztę aplikacja ustawi sama.</p></div>' + keyBox(false) + keyHelp(true);
   }
   var fc = S.fc.filter(function (x) { return !x.done; }), fd = S.fc.filter(function (x) { return x.done; });
   h += '<div class="card"><h3>🎯 Do pracy</h3>' + (fc.length ? fc.map(function (x) { return '<div class="step"><button class="ck" data-a="fcdone" data-id="' + x.id + '"></button><span style="flex:1;font-size:14px">' + esc(x.t) + '<small class="note" style="display:block">od ' + new Date(x.ts).toLocaleDateString("pl-PL") + '</small></span><button class="ib" data-a="fcrm" data-id="' + x.id + '">✕</button></div>'; }).join("") : '<div class="note">Pusto. Mentor zaproponuje rzeczy do pracy w przeglądzie tygodnia – możesz też dopisać własne.</div>') +
@@ -878,9 +1036,9 @@ function ment() {
     h += "</div>"; lastRev = sug;
   }
   h += '<div class="card"><h3>💬 Rozmowa z mentorem</h3><div class="chat">' + (S.mt.length ? S.mt.slice(-30).map(function (m) { return '<div class="bub ' + m.r + '">' + (m.r === "m" ? md(m.t) : esc(m.t)) + "</div>"; }).join("") : '<div class="note">Zapytaj o cokolwiek – mentor zna Twoje dane z ostatnich 30 dni.</div>') + '<div id="chatend"></div></div>';
-  h += '<div style="margin-bottom:8px">' + ["Nad czym powinienem teraz popracować?", "Dlaczego odpuszczam niektóre nawyki?", "Jakie wzorce widzisz w moim pamiętniku?", "Pomóż mi zaplanować jutro", "Który nawyk ma największy wpływ na mój dzień?", "Jak moje jedzenie wpływa na nawyki i samopoczucie?"].map(function (q) { return '<span class="tag" data-a="chatq" data-id="' + esc(q) + '">' + esc(q) + "</span>"; }).join("") + "</div>";
+  h += '<div style="margin-bottom:8px">' + ["Nad czym powinienem teraz popracować?", "Dlaczego odpuszczam niektóre nawyki?", "Jakie wzorce widzisz w moim pamiętniku?", "Pomóż mi zaplanować jutro", "Który nawyk ma największy wpływ na mój dzień?", "🍽️ Co zjeść jutro?", "Jak moje jedzenie wpływa na nawyki i samopoczucie?", "Jakie pułapki myślenia widzisz w moich odpowiedziach w pamiętniku?"].map(function (q) { return '<span class="tag" data-a="chatq" data-id="' + esc(q) + '">' + esc(q) + "</span>"; }).join("") + "</div>";
   h += '<div class="tw"><textarea id="chatin" placeholder="Napisz albo dotknij 🎤…" style="min-height:70px;padding-right:52px"></textarea>' + micBtn("chatin") + '</div><div class="btns" style="margin-top:8px;justify-content:space-between"><button class="pri" data-a="chats"' + (busy || !hasAI() ? " disabled" : "") + '>Wyślij</button>' + (S.mt.length ? '<button class="lnk" data-a="chatclr">Wyczyść rozmowę</button>' : "") + "</div></div>";
-  h += '<div class="note">Mentor: ' + TONES[S.set.tone][0] + " · " + (hasAI() ? (LASTM || prov().n) : "brak klucza") + ". Co widzi mentor: " + [S.set.share.h && "nawyki", S.set.share.d && "pamiętnik", S.set.share.t && "jedzenie", S.set.share.f && "post", S.set.share.p && "projekty"].filter(Boolean).join(", ") + ". Zmienisz to w Ustawieniach. Dane są wysyłane do wybranego dostawcy AI tylko, gdy korzystasz z mentora.</div>";
+  h += '<div class="note">Mentor: ' + TONES[S.set.tone][0] + " · " + (hasAI() ? (LASTM || prov().n) : "brak klucza") + ". Co widzi mentor: " + [S.set.share.h && "nawyki", S.set.share.d && "pamiętnik", S.set.share.t && "jedzenie", S.set.share.f && on("fast") && "post", S.set.share.p && on("proj") && "projekty"].filter(Boolean).join(", ") + ". Zmienisz to w Ustawieniach. Dane są wysyłane do wybranego dostawcy AI tylko, gdy korzystasz z mentora.</div>";
   return h;
 }
 
@@ -888,6 +1046,7 @@ function ment() {
 function wiecej() {
   var act = S.pj.filter(function (p) { return p.status === "doing"; }).length, ig = S.g.filter(function (g) { return !g.done; }).length;
   var t = [["proj", "💡", "Pomysły i projekty", S.pj.length + " · w toku " + act], ["cele", "🎯", "Cele", ig + " aktywnych"], ["roz", "🤸", "Rozruch", "ćwiczenia z minutnikiem"], ["ryt", "⏰", "Rytm dnia", "plan i przypomnienia"], ["fast", "🌙", "Post przerywany", actF() ? "trwa teraz" : "historia i cel"], ["rap", "📊", "Raport", "PDF, CSV, udostępnij"], ["jedz", "🍽️", "Jedzenie – profil", "dane, limit, wygląd"], ["ust", "⚙️", "Ustawienia i AI", hasAI() ? prov().n : "dodaj klucz API"], ["dane", "💾", "Kopie i dane", S.bk ? "kopia " + new Date(S.bk).toLocaleDateString("pl-PL") : "brak kopii"]];
+  t = t.filter(function (x) { return x[0] === "proj" ? on("proj") : x[0] === "ryt" ? on("ryt") : x[0] === "fast" ? on("fast") : true; });
   return '<div class="g2">' + t.map(function (x) { return '<div class="tile" data-a="' + (x[0] === "jedz" ? 'tzgo" data-id="profil' : 'tab" data-id="' + x[0]) + '"><i>' + x[1] + "</i>" + x[2] + "<small>" + esc(x[3]) + "</small></div>"; }).join("") + '</div><div class="note" style="text-align:center">Nawyki i Talerz ' + VER + "</div>";
 }
 
@@ -933,9 +1092,11 @@ function ryt() {
 function notify(t, b) { try { if (!("Notification" in window) || Notification.permission !== "granted") return; if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.ready.then(function (r) { r.showNotification(t, { body: b, icon: "icon-192.png", tag: t + b }); }); else new Notification(t, { body: b, icon: "icon-192.png" }); } catch (e) {} }
 function reminders() {
   var a = [];
-  S.ry.forEach(function (x) { var q = pt(x[1]); if (x[4] && q) a.push({ id: x[0], q: q, t: "Rytm dnia", b: x[2], d: x[3] || "" }); });
+  if (on("ryt")) S.ry.forEach(function (x) { var q = pt(x[1]); if (x[4] && q) a.push({ id: x[0], q: q, t: "Rytm dnia", b: x[2], d: x[3] || "" }); });
   H.forEach(function (y) { var q = pt(y[7]); if (q) a.push({ id: "h" + y[0], q: q, t: CATS[y[1]][1] + " Nawyk", b: y[2], d: y[4] ? "Mini: " + y[4] : "", hid: y[0] }); });
   var q2 = pt(S.set.dr); if (S.set.drOn && q2) a.push({ id: "diary", q: q2, t: "📔 Pamiętnik", b: "Jedno zdanie wystarczy. " + dayQs(key(new Date()))[0], d: "", diary: 1 });
+  var q3 = S.set.ev && S.set.ev.on && pt(S.set.ev.t); if (q3) a.push({ id: "ev", q: q3, t: "🌆 Wieczorny bilans", b: "Wieczorny bilans – otwórz Nawyki i Talerz", d: "Ile zostało kalorii, czego brakuje i które serie chronić", ev: 1 });
+  var q4 = S.set.sp && S.set.sp.on && pt(S.set.sp.t); if (q4) a.push({ id: "sp", q: q4, t: "🔥 Ochrona serii", b: "Ochrona serii – sprawdź nawyki (wystarczy Mini)", d: "", sp: 1 });
   return a;
 }
 function chk() {
@@ -943,12 +1104,14 @@ function chk() {
   reminders().forEach(function (r) {
     var t = pad(r.q[0]) + ":" + pad(r.q[1]), id = r.id + dk + t; if (t !== now || fired[id]) return; fired[id] = 1;
     if (r.diary && dLv(dk) > 0) return; if (r.hid && lvl(dk, r.hid) > 0) return;
+    if (r.ev) { notify(r.t, evNote(dk)); return; }
+    if (r.sp) { tzReset(); var rr = atRisk(dk); if (!rr.length) return; notify(r.t, rr.slice(0, 3).map(function (x) { return x[0][2] + " (" + x[1] + " " + pl(x[1], "dzień", "dni", "dni") + ")"; }).join(", ") + " – wystarczy Mini, żeby nie przerwać serii!"); return; }
     notify(r.t + " · " + t, r.b);
   });
 }
 function ics() {
   var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nawyki//PL", "CALSCALE:GREGORIAN"], n = new Date(), d0 = n.getFullYear() + pad(n.getMonth() + 1) + pad(n.getDate()), A = reminders(), c = 0;
-  if (!S.ry.some(function (x) { return x[4] && pt(x[1]); })) S.ry.forEach(function (x) { var q = pt(x[1]); if (q) A.push({ id: x[0], q: q, b: x[2], d: x[3] || "" }); });
+  if (on("ryt") && !S.ry.some(function (x) { return x[4] && pt(x[1]); })) S.ry.forEach(function (x) { var q = pt(x[1]); if (q) A.push({ id: x[0], q: q, b: x[2], d: x[3] || "" }); });
   function e(s) { return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
   A.forEach(function (x) { c++; L.push("BEGIN:VEVENT", "UID:" + x.id + "-" + d0 + "@nawyki", "DTSTAMP:" + d0 + "T000000Z", "DTSTART:" + d0 + "T" + pad(x.q[0]) + pad(x.q[1]) + "00", "DURATION:PT15M", "RRULE:FREQ=DAILY", "SUMMARY:" + e(x.b), "DESCRIPTION:" + e(x.d), "BEGIN:VALARM", "TRIGGER:PT0S", "ACTION:DISPLAY", "DESCRIPTION:" + e(x.b), "END:VALARM", "END:VEVENT"); });
   if (!c) { toast("Dodaj godziny w formacie 07:00."); return; }
@@ -1034,10 +1197,18 @@ function ust() {
   } else { h += keyBox(true) + keyHelp(true); }
   h += '<h3>Charakter mentora</h3><div class="card">' + Object.keys(TONES).map(function (t) { return '<label class="sw"><input type="radio" name="tone" data-f="tone" value="' + t + '"' + (S.set.tone === t ? " checked" : "") + "> " + TONES[t][0] + "</label>"; }).join("");
   h += '<label class="note">O mnie – co mentor powinien wiedzieć (cele, wartości, sytuacja)</label><div class="tw"><textarea id="about" data-f="about" placeholder="np. Pracuję przy biurku, chcę wzmocnić plecy, nauczyć się hiszpańskiego i rozwijać duchowo. Ważna jest dla mnie rodzina. Lubię konkretne rady.">' + esc(S.set.about) + "</textarea>" + micBtn("about") + "</div>";
-  h += '<details style="margin-top:10px"><summary class="note">🔐 Prywatność – co mentor może widzieć</summary>' + [["h", "Nawyki i serie"], ["d", "Pamiętnik i odpowiedzi"], ["t", "Jedzenie, płyny, kroki i waga"], ["f", "Post przerywany"], ["p", "Pomysły i projekty"]].map(function (x) { return '<label class="sw"><input type="checkbox" data-f="share" value="' + x[0] + '"' + (S.set.share[x[0]] ? " checked" : "") + "> " + x[1] + "</label>"; }).join("") + '<div class="note">Dane wysyłane są do dostawcy AI tylko, gdy korzystasz z mentora.</div></details></div>';
+  h += '<details style="margin-top:10px"><summary class="note">🔐 Prywatność – co mentor może widzieć</summary>' + [["h", "Nawyki i serie"], ["d", "Pamiętnik i odpowiedzi"], ["t", "Jedzenie, płyny, kroki i waga"], ["f", "Post przerywany"], ["p", "Pomysły i projekty"]].filter(function (x) { return x[0] === "f" ? on("fast") : x[0] === "p" ? on("proj") : true; }).map(function (x) { return '<label class="sw"><input type="checkbox" data-f="share" value="' + x[0] + '"' + (S.set.share[x[0]] ? " checked" : "") + "> " + x[1] + "</label>"; }).join("") + '<div class="note">Dane wysyłane są do dostawcy AI tylko, gdy korzystasz z mentora.</div></details></div>';
   h += '<h3>🔒 Blokada hasłem</h3><div class="card">' + (LK ? '<div class="note" style="margin-bottom:8px">✅ Aplikacja jest chroniona hasłem. Blokuje się przy uruchomieniu i po 1 minucie w tle.</div><div class="btns"><button class="sec" data-a="lockset">Zmień hasło</button><button class="sec" data-a="locknow">🔒 Zablokuj teraz</button><button class="sec dng" data-a="lockoff">Wyłącz blokadę</button></div>' :
     '<div class="note" style="margin-bottom:8px">Ustaw hasło lub PIN – nikt nie zajrzy do Twojego pamiętnika, gdy weźmie telefon.</div><button class="pri" data-a="lockset">🔒 Ustaw hasło</button>') + "</div>";
-  h += '<h3>📔 Pamiętnik</h3><div class="card"><label class="sw"><input type="checkbox" data-f="drOn"' + (S.set.drOn ? " checked" : "") + '> Codzienne przypomnienie o wpisie</label><div class="btns"><span class="note">Godzina:</span><input type="time" data-f="dr" value="' + esc(S.set.dr) + '"></div><div class="note">Przypomnienie przyjdzie tylko, jeśli tego dnia nic jeszcze nie zapisałeś.</div></div>';
+  var nok = "Notification" in window, npm = nok ? Notification.permission : "unsupported";
+  h += '<h3>🔔 Przypomnienia</h3><div class="card">' + (nok && npm === "default" ? '<button class="pri" data-a="perm" style="margin-bottom:8px">🔔 Włącz powiadomienia</button>' : "") +
+    (!nok ? '<div class="note">Ta przeglądarka nie obsługuje powiadomień.</div>' : npm === "denied" ? '<div class="note">Powiadomienia są zablokowane w ustawieniach przeglądarki.</div>' : "") +
+    '<label class="sw"><input type="checkbox" data-f="evOn"' + (S.set.ev.on ? " checked" : "") + '> 🌆 Wieczorny bilans – ile zostało kalorii, czego brakuje, które serie chronić</label><div class="btns"><span class="note">Godzina:</span><input type="time" data-f="evT" value="' + esc(S.set.ev.t) + '"></div>' +
+    '<label class="sw" style="margin-top:8px"><input type="checkbox" data-f="spOn"' + (S.set.sp.on ? " checked" : "") + '> 🔥 Ochrona serii – gdy nawyk z serią 3+ dni nie jest jeszcze dziś zaliczony</label><div class="btns"><span class="note">Godzina:</span><input type="time" data-f="spT" value="' + esc(S.set.sp.t) + '"></div>' +
+    '<label class="sw" style="margin-top:8px"><input type="checkbox" data-f="drOn"' + (S.set.drOn ? " checked" : "") + '> 📔 Pamiętnik – gdy tego dnia nic jeszcze nie zapisałeś</label><div class="btns"><span class="note">Godzina:</span><input type="time" data-f="dr" value="' + esc(S.set.dr) + '"></div>' +
+    '<div class="btns" style="margin-top:10px">' + (nok && npm === "granted" ? '<button class="sec sm" data-a="ntest">Testuj powiadomienie</button>' : "") + '<button class="sec sm" data-a="ics">📅 Dodaj do kalendarza (.ics)</button></div>' +
+    '<div class="note" style="margin-top:6px">Powiadomienia z aplikacji przychodzą, gdy jest otwarta lub działa w tle. Najpewniejsze są przypomnienia w kalendarzu telefonu: plik .ics doda codzienne przypomnienia (bilans, serie, pamiętnik i nawyki z godziną), a po ich dotknięciu otworzysz aplikację i zobaczysz bilans. Godzinę przypomnienia nawyku ustawisz w Dziś → ✏️ Edytuj nawyki.</div></div>';
+  h += '<h3>🧩 Moduły</h3><div class="card">' + [["fast", "🌙 Post przerywany"], ["ryt", "⏰ Rytm dnia"], ["proj", "💡 Pomysły i projekty"]].map(function (x) { return '<label class="sw"><input type="checkbox" data-f="mod" value="' + x[0] + '"' + (on(x[0]) ? " checked" : "") + "> " + x[1] + "</label>"; }).join("") + '<div class="note">Wyłączone moduły znikają z menu Więcej i z rozmów z mentorem. Ich dane zostają – po włączeniu wszystko wróci.</div></div>';
   h += '<h3>Wygląd</h3><div class="card"><select data-f="theme"><option value="auto"' + (S.set.theme === "auto" ? " selected" : "") + '>Motyw systemowy</option><option value="light"' + (S.set.theme === "light" ? " selected" : "") + '>Jasny</option><option value="dark"' + (S.set.theme === "dark" ? " selected" : "") + ">Ciemny</option></select></div>";
   return h;
 }
@@ -1218,10 +1389,16 @@ document.addEventListener("click", function (ev) {
     case "welc": S.set.welc = 1; sv(); render(); break;
     case "v4ok": S.set.v4ok = 1; sv(); render(); break;
     case "tzgo": tzGo(id); break;
+    case "tmrw": doTmrw(); break;
+    case "think": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doThink(t.getAttribute("data-k")); break;
+    case "wgset": wgSheet(); break;
+    case "wgpick": S.wg = { wk: monKey(), g: id, n: (S.wg && S.wg.n) || 5 }; sv(); wgSheet(); break;
+    case "wgn": if (!S.wg) { toast("Najpierw wybierz cel."); break; } S.wg.n = +id; sv(); wgSheet(); break;
+    case "wgoff": S.wg = null; sv(); closeSheet(); break;
     case "migok": S.set.migOk = 1; sv(); render(); break;
     case "bklater": S.bk = Date.now() - 4 * 864e5; sv(); render(); break;
     case "mic": dictate(t.getAttribute("data-t"), t); break;
-    case "fab": openSheet("Szybki wpis", '<div class="menu">' + [["meal", "🍽️", "Posiłek"], ["water", "💧", "Woda"], ["note", "📝", "Notatka"], ["rec", "🎙️", "Nagranie"], ["cam", "📷", "Zdjęcie"], ["idea", "💡", "Pomysł"], ["q", "❓", "Pytanie"], ["grat", "🙏", "Wdzięczność"]].map(function (x) { return '<div class="tile" data-a="fabgo" data-id="' + x[0] + '"><i>' + x[1] + "</i>" + x[2] + "</div>"; }).join("") + '</div><div class="note" style="margin-top:10px">Posiłek i woda trafiają do Jedzenia, pomysł do „Pomysły i projekty”, reszta do pamiętnika.</div>'); break;
+    case "fab": openSheet("Szybki wpis", '<div class="menu">' + [["meal", "🍽️", "Posiłek"], ["water", "💧", "Woda"], ["note", "📝", "Notatka"], ["rec", "🎙️", "Nagranie"], ["cam", "📷", "Zdjęcie"], ["idea", "💡", "Pomysł"], ["q", "❓", "Pytanie"], ["grat", "🙏", "Wdzięczność"]].filter(function (x) { return x[0] !== "idea" || on("proj"); }).map(function (x) { return '<div class="tile" data-a="fabgo" data-id="' + x[0] + '"><i>' + x[1] + "</i>" + x[2] + "</div>"; }).join("") + '</div><div class="note" style="margin-top:10px">Posiłek i woda trafiają do Jedzenia, reszta do pamiętnika.</div>'); break;
     case "fabgo": closeSheet(true);
       if (id === "meal" || id === "water") { tzGo(id === "meal" ? "posilek" : "woda"); break; }
       if (id === "idea") { CP = { id: uid("p"), name: "", status: "idea", desc: "", steps: [], ts: Date.now(), up: Date.now() }; pjSheet(); setTimeout(function () { var e = $("pjn"); if (e) e.focus(); }, 60); }
@@ -1245,7 +1422,7 @@ document.addEventListener("click", function (ev) {
     case "mq": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doMQ(t.getAttribute("data-k")); break;
     case "rev": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doReview(); break;
     case "chats": { var ci = $("chatin"); if (ci && ci.value.trim()) { var v2 = ci.value; stopDict(); chatSend(v2); } break; }
-    case "chatq": chatSend(id); break;
+    case "chatq": if (/^🍽️ Co zjeść jutro/.test(id)) doTmrw(); else chatSend(id); break;
     case "chatclr": if (confirm("Wyczyścić rozmowę z mentorem?")) { S.mt = []; sv(); render(); } break;
     case "fcadd": { var fi = $("fcn"); if (fi && fi.value.trim()) { S.fc.push({ id: uid("f"), t: fi.value.trim(), ts: Date.now(), done: 0 }); sv(); render(); } break; }
     case "fcsug": { var s = lastRev && lastRev[+t.getAttribute("data-i")]; if (s) { S.fc.push({ id: uid("f"), t: s, ts: Date.now(), done: 0 }); sv(); render(); toast("Dodano do „Do pracy” – zobaczysz to na ekranie Dziś"); } break; }
@@ -1345,6 +1522,11 @@ document.addEventListener("change", function (ev) {
   if (f === "fg") { S.fg = Math.max(1, Math.min(48, +t.value || 16)); sv(); render(); return; }
   if (f === "tone") { S.set.tone = t.value; sv(); return; }
   if (f === "share") { S.set.share[t.value] = t.checked ? 1 : 0; sv(); return; }
+  if (f === "evOn") { S.set.ev.on = t.checked ? 1 : 0; sv(); if (t.checked && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); return; }
+  if (f === "evT") { S.set.ev.t = t.value || "18:00"; sv(); return; }
+  if (f === "spOn") { S.set.sp.on = t.checked ? 1 : 0; sv(); if (t.checked && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); return; }
+  if (f === "spT") { S.set.sp.t = t.value || "21:00"; sv(); return; }
+  if (f === "mod") { S.set.mod[t.value] = t.checked ? 1 : 0; sv(); return; }
   if (f === "drOn") { S.set.drOn = t.checked ? 1 : 0; sv(); if (t.checked && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); return; }
   if (f === "dr") { S.set.dr = t.value || "21:00"; sv(); return; }
   if (f === "theme") { S.set.theme = t.value; sv(); tzTheme(); render(); return; }
@@ -1360,10 +1542,10 @@ document.addEventListener("toggle", function (ev) { var d = ev.target, c = d.get
 document.addEventListener("keydown", function (ev) { if (ev.key === "Enter" && !ev.shiftKey) { if (ev.target.id === "lpw") { ev.preventDefault(); tryUnlock(); return; } if (ev.target.id === "newkey") { ev.preventDefault(); document.querySelector('[data-a="ksave"]').click(); return; } if (ev.target.id === "pjns") { ev.preventDefault(); document.querySelector('[data-a="psa"]').click(); } else if (ev.target.id === "fcn") { ev.preventDefault(); document.querySelector('[data-a="fcadd"]').click(); } } if (ev.key === "Escape" && $("sheet").innerHTML) closeSheet(); });
 
 document.addEventListener("visibilitychange", function () { if (document.hidden) hiddenAt = Date.now(); else if (LK && !locked && hiddenAt && Date.now() - hiddenAt > 60000) { locked = true; render(); } });
-tzLinksInit(); syncKeys();
+tzLinksInit(); v41Init(); syncKeys();
 try { if (localStorage.getItem("talerz:theme") !== (S.set.theme || "auto")) localStorage.setItem("talerz:theme", S.set.theme || "auto"); } catch (e) {}
 (function () { var a = new URLSearchParams(location.search).get("akcja"); if (a === "posilek" || a === "woda") { try { history.replaceState({ nawTab: tab, d: 0 }, "", location.pathname); } catch (e) {} tzPend = a; tab = "jedz"; } })();
-document.addEventListener("visibilitychange", function () { if (!document.hidden) tzChanged(); });
+document.addEventListener("visibilitychange", function () { if (!document.hidden) { wgInit(); tzChanged(); } });
 setInterval(tick, 1000); setInterval(chk, 20000); render(); chk();
 setTimeout(function () { keyed().forEach(function (p) { ensureModels(p); }); }, 3000);
 try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (r) { r.update().catch(function () {}); }).catch(function () {}); } catch (e) {}

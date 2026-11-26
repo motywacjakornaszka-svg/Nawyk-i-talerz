@@ -159,3 +159,20 @@ body.tzon main,body.tzon .fab{display:none}
 .lkt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
 .lkt label{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--mut)}
 .lkt input{width:78px}
+/* ---------- 4.1: wieczorny bilans, cel tygodnia, podpowiedź mentora ---------- */
+.card.food .fk{margin-bottom:10px}
+.card.food .fk span small{font-size:11px}
+.wgl{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:13px}
+.wgl .lnk{padding:0;text-align:left}
+.wgd{display:flex;gap:5px;margin-top:6px}
+.wgd .d{flex:1;text-align:center;font-size:11px;font-weight:700;padding:4px 0;border-radius:8px;background:var(--ac2);color:var(--mut);opacity:.55}
+.wgd .d.on{background:var(--ac);color:#fff;opacity:1}
+.wgd .d.no{opacity:1;background:transparent;border:1px dashed var(--bd)}
+.wgd .d.td{opacity:1;background:transparent;border:1px solid var(--ac)}
+.card.ev{border-left:4px solid var(--ac)}
+.evl{display:flex;gap:8px;align-items:flex-start;font-size:14px;padding:4px 0}
+.evl i{font-style:normal;flex:none;width:22px;text-align:center}
+.opt{display:block;width:100%;text-align:left;margin:0 0 6px;padding:11px 12px;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit;cursor:pointer}
+.opt.on{border-color:var(--ac);background:var(--ac2);font-weight:700}
+.ai.think{margin-top:10px;font-size:14px}
+.ai.think b:first-child{display:block;margin-bottom:4px}
