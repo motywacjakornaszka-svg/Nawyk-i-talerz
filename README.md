@@ -1,4 +1,4 @@
-# Nawyki i Talerz 4.1
+# Nawyki i Talerz 4.2
 
 Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i Talerz (licznik kalorii ze zdjęć, płyny, kroki, waga) w jednej aplikacji.
 
@@ -15,6 +15,14 @@ Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i
 - **Postęp**: karta „Jedzenie – ostatnie 7 dni” (dni w limicie, cel płynów, warzywa, kroki, zmiana wagi).
 - **Wspólne klucze AI** (Gemini i Claude): klucz dodany w jednym miejscu działa w obu częściach.
 - **Kopia zapasowa** (Więcej → Kopie i dane) zawiera także dane Jedzenia.
+
+## Nowości w 4.2: zakładka Mentor
+- **Wszystkie rozmowy z AI są w zakładce Mentor.** Pozostałe zakładki pokazują same fakty. Przyciski „🧭 Omów z mentorem” (pamiętnik), „🧭 Co zjeść jutro?” (wieczorny bilans) i „🧭 Zapisz i zapytaj mentora o zdjęcie” (wpis) przenoszą do Mentora i tam zadają pytanie. Wcześniejsze odpowiedzi AI z pamiętnika są w archiwum rozmów.
+- **Pole pytania jest na górze.** Zaraz pod nim widać „Mentor myśli…”, a potem dzisiejszą rozmowę, z najnowszą wymianą u góry.
+- **Rozmowy z poprzednich dni trafiają do zwiniętego „🗂️ Archiwum rozmów”**, podzielonego na dni.
+- **Naprawiony błąd:** po odpowiedzi mentora przycisk „Wyślij” zostawał nieaktywny. Tekst wpisany w trakcie czekania już nie znika.
+- **🔊 Czytanie na głos.** Gdy pytanie jest podyktowane (🎤), mentor czyta odpowiedź, żeńskim głosem, jeśli telefon taki ma. Przy każdej odpowiedzi jest 🔊 (przeczytaj) i 📋 (kopiuj). Tryb (gdy pytam głosem, zawsze, nigdy), głos i tempo ustawisz w Ustawienia → Mentor AI.
+- Gdy odpowiedź nie przyjdzie (np. brak internetu), pojawia się przycisk „Ponów”.
 
 ## Nowości w 4.1
 - **⚡ Szybko dodaj posiłek**: w „＋ Posiłek” na górze są ⭐ ulubione i posiłki, które jesz często, z wyborem porcji (½, 1, 1½, 2). Gwiazdka ☆ przy posiłku na liście dodaje go do ulubionych.
@@ -43,7 +51,7 @@ Warunek: używasz **tej samej przeglądarki na tym samym telefonie**. Dla bezpie
 Po przejściu korzystaj już tylko z nowej aplikacji. Stare możesz zostawić na jakiś czas jako zapas, bo pracują na tych samych danych.
 
 ## Aktualizacje
-Po zmianie plików podbij `VERSION` w `sw.js` (np. `nawyki-talerz-v4.1-2`). Zamknij aplikację i otwórz ją ponownie.
+Po zmianie plików podbij `VERSION` w `sw.js` (np. `nawyki-talerz-v4.2-2`). Zamknij aplikację i otwórz ją ponownie.
 
 ## Pliki
 - `index.html`, `app.js`, `data.js`, `style.css`: Nawyki (aplikacja główna);

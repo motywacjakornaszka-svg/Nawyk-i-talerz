@@ -1,7 +1,7 @@
-/* Nawyki i Talerz 4.1 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
+/* Nawyki i Talerz 4.2 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
 (function () {
 "use strict";
-var VER = "4.1";
+var VER = "4.2";
 var KEY = "nawyki-v3", OLD = "nawyki-v2", KEYS = "nawyki-v3-klucze";
 var CATS = NAW.CATS, LV = NAW.LV, ST = NAW.ST, ET = NAW.ET, PROV = NAW.PROV;
 
@@ -301,6 +301,18 @@ function evCard(k) {
   return h + "</div>";
 }
 function on(m) { return !!(S.set.mod && S.set.mod[m]); }
+function v42Init() {
+  var ch = false;
+  if (!S.set.tts) { S.set.tts = { mode: "voice", voice: "", rate: 1 }; ch = true; }
+  if (!S.set.v42mig) { /* odpowiedzi AI z pamiętnika (podpowiedzi i analizy zdjęć) trafiają do rozmów z mentorem */
+    S.set.v42mig = 1; ch = true;
+    Object.keys(S.pa || {}).forEach(function (k) { var p = S.pa[k]; if (p && p.m) { var ts = p.mts || k2d(k).getTime(); S.mt.push({ r: "u", t: "🧠 Omów moje odpowiedzi w pamiętniku (" + dshort(k) + ")", ts: ts }, { r: "m", t: p.m, ts: ts + 1 }); delete p.m; delete p.mts; } });
+    (S.j || []).forEach(function (e) { if (e.ai) { var im = (e.media || []).filter(function (m) { return m.k === "img"; }).map(function (m) { return m.id; }); var q = { r: "u", t: "📷 Co widzisz na moim zdjęciu z pamiętnika?" + (e.text ? " – " + e.text.slice(0, 80) : ""), ts: e.t || Date.now() }; if (im.length) q.im = im; S.mt.push(q, { r: "m", t: e.ai, ts: (e.t || Date.now()) + 1 }); delete e.ai; } });
+    S.mt.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+  }
+  S.mt.forEach(function (m) { if (!m.ts) { m.ts = 0; } });
+  if (ch) sv();
+}
 function v41Init() {
   var ch = false;
   if (!S.set.ev) { S.set.ev = { on: 1, t: "18:00" }; ch = true; }
@@ -361,8 +373,7 @@ function diaryCard(k) {
   if (es.length) h += '<div style="margin-top:6px">' + es.map(entryHtml).join("") + "</div>";
   h += '<details style="margin-top:10px"' + (S.set.col.pq ? "" : " open") + ' data-col="pq"><summary>❓ Pytania dnia <span class="note">(' + dAns(k) + '/3 · trzy odpowiedzi = Plus)</span></summary>';
   qs.forEach(function (q, i) { h += '<label class="note" style="font-size:13px;color:var(--tx);margin-top:8px">' + esc(q) + '</label><div class="tw"><textarea id="pa' + i + '" data-f="pa" data-k="' + k + '" data-i="' + i + '" style="min-height:56px;padding-right:52px">' + esc(pa.a[i] || "") + '</textarea>' + micBtn("pa" + i) + '</div>'; });
-  if (pa.m) h += '<div class="ai think"><b>🧠 Mentor o Twoich odpowiedziach</b>' + md(pa.m) + "</div>";
-  if (hasAI()) h += '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="mq" data-k="' + k + '">✨ Pytanie od mentora</button><button class="sec sm" data-a="think" data-k="' + k + '"' + (dAns(k) || (S.n[k] || "").trim() ? "" : " disabled") + ">🧠 " + (pa.m ? "Nowa podpowiedź" : "Podpowiedź mentora") + "</button></div>";
+  if (hasAI()) h += '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="think" data-k="' + k + '"' + (dAns(k) || (S.n[k] || "").trim() ? "" : " disabled") + ">🧭 Omów z mentorem</button></div>";
   h += '</details><div class="note" style="margin-top:6px">Pamiętnik też ma poziomy: Mini – coś zapisane, Plus – 3 odpowiedzi lub ok. 150 znaków, Elita – 500+ znaków. Seria: ' + dStreak() + ' dni.</div></div>';
   return h;
 }
@@ -452,7 +463,6 @@ function entryHtml(e) {
   var im = (e.media || []).filter(function (m) { return m.k === "img"; }), au = (e.media || []).filter(function (m) { return m.k === "aud"; });
   if (im.length) h += '<div class="thumbs">' + im.map(function (m) { return '<img data-mid="' + m.id + '" data-a="full" alt="zdjęcie">'; }).join("") + "</div>";
   au.forEach(function (m) { h += '<audio controls preload="none" data-mid="' + m.id + '"></audio>'; });
-  if (e.ai) h += '<div class="ai"><b>🧭 Mentor:</b>' + md(e.ai) + "</div>";
   return h + "</div>";
 }
 function allDays() {
@@ -515,8 +525,7 @@ function entryForm() {
   au.forEach(function (m) { h += '<div class="btns" style="flex-wrap:nowrap"><audio controls data-mid="' + m.id + '"></audio><button class="sec sm" data-a="mrm" data-id="' + m.id + '">✕</button></div><div class="btns"><button class="sec sm" data-a="trans" data-id="' + m.id + '">✨ Przepisz nagranie na tekst</button></div>'; });
   h += '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="addpic" data-m="cam">📷 Aparat</button><button class="sec sm" data-a="addpic" data-m="pic">🖼️ Galeria</button><button class="sec sm" id="recb" data-a="rec">' + (REC ? "⏹️ Zakończ nagranie" : "🎙️ Nagraj głos") + "</button></div>";
   if (REC) h += '<div class="note" id="rect">Nagrywanie…</div>';
-  if (im.length) h += '<div class="btns" style="margin-top:6px"><button class="sec sm" data-a="aipic">✨ Analiza zdjęcia przez mentora</button></div>';
-  if (e.ai) h += '<div class="ai"><b>🧭 Mentor:</b>' + md(e.ai) + '</div>';
+  if (im.length && hasAI()) h += '<div class="btns" style="margin-top:6px"><button class="sec sm" data-a="aipic">🧭 Zapisz i zapytaj mentora o zdjęcie</button></div>';
   if (busy) h += '<div class="busy">⏳ ' + esc(busy) + "</div>";
   h += '<div class="btns" style="margin-top:12px;justify-content:space-between"><button class="pri" data-a="esave">💾 Zapisz</button>' + (CE.isNew ? "" : '<button class="sec dng" data-a="edel">🗑 Usuń wpis</button>') + "</div>";
   return h;
@@ -567,6 +576,8 @@ function dictate(tid, btn) {
   if (DICT) { var same = DICT.t === tid; stopDict(); if (same) return; }
   if (!SR) { toast("Dyktowanie nie działa w tej przeglądarce. Użyj mikrofonu na klawiaturze telefonu albo 🎙️ Nagrania."); return; }
   if (!$(tid)) return;
+  if (TTS.on) ttsStop();
+  if (tid === "chatin") CHATV = true;
   var r = new SR(); r.lang = "pl-PL"; r.continuous = true; r.interimResults = false;
   r.onresult = function (ev) {
     for (var i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) {
@@ -946,7 +957,7 @@ function ctx(nd) {
 }
 function run(label, fn) {
   if (busy) return; busy = label; rerender();
-  return fn().then(function (x) { busy = ""; return x; }, function (e) { busy = ""; toast("⚠️ " + e.message, 6000); rerender(); throw e; }).catch(function () {});
+  return fn().then(function (x) { busy = ""; rerender(); return x; }, function (e) { busy = ""; toast("⚠️ " + e.message, 6000); rerender(); throw e; }).catch(function () {});
 }
 function rerender() { if (CE && $("etx")) { readForm(); showEntry(); } else if (CP && $("pjn")) { pjRead(); pjSheet(); } else render(); }
 function parseList(t, head) {
@@ -956,22 +967,21 @@ function parseList(t, head) {
 function doReview() {
   return run("Mentor analizuje Twój tydzień…", function () {
     return ai({ sys: sysPrompt(), msgs: [{ r: "u", t: ctx(30) + "\n\nZADANIE: Przygotuj mój przegląd ostatnich 7 dni (porównaj z wcześniejszymi tygodniami). Użyj nagłówków:\n## ✅ Co poszło dobrze\n## ⚠️ Co słabnie\n## 🔍 Wzorce i powiązania\n" + (S.set.share.t ? "## 🍽️ Jedzenie (jak poszedł cel tygodnia, co poprawić; zaproponuj JEDEN cel na następny tydzień spośród: " + Object.keys(WG).map(function (g) { return WG[g][0].replace(/^\S+\s/, ""); }).join(", ") + ")\n" : "") + (S.set.share.d ? "## 🧠 Myślenie i nastawienie (na podstawie odpowiedzi w pamiętniku: co wspiera, jakie pułapki myślenia się powtarzają, jedno zdrowsze zdanie na tydzień)\n" : "") + "## 💬 Pytanie do refleksji\n## 🎯 Do pracy\nW sekcji „Do pracy” podaj 1–3 konkretne, mierzalne działania na najbliższy tydzień – każde w osobnej linii zaczynającej się od „- ”. Odnieś się do listy „Do pracy” z poprzednich tygodni (co się udało, co nie). Maks. ok. 450 słów." }] })
-      .then(function (t) { S.rev.push({ k: key(new Date()), ts: Date.now(), text: t }); sv(); tab = "ment"; render(); window.scrollTo(0, 0); });
+      .then(function (t) { S.rev.push({ k: key(new Date()), ts: Date.now(), text: t }); sv(); tab = "ment"; render(); setTimeout(function () { var rc = $("revcard"); if (rc) rc.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80); });
   });
 }
 /* pamiętnik → zdrowe myślenie */
 function doThink(k) {
-  return run("Mentor czyta Twój pamiętnik…", function () {
-    var qs = dayQs(k), pa = S.pa[k] || { a: [] }, tx = "MÓJ WPIS Z DNIA " + k + ":\n" + ((S.n[k] || "").trim() ? "Notatka: " + S.n[k].trim() + "\n" : "") +
-      qs.map(function (q, i) { return pa.a[i] && pa.a[i].trim() ? q + " → " + pa.a[i].trim() : ""; }).filter(Boolean).join("\n") +
-      dEntries(k).map(function (e) { return e.text ? "\nWpis " + hm(e.t) + ": " + e.text.slice(0, 600) : ""; }).join("");
-    return ai({ sys: sysPrompt(), msgs: [{ r: "u", t: ctx(14) + "\n\n" + tx + "\n\nZADANIE: Przeczytaj mój dzisiejszy wpis i odpowiedzi na pytania dnia (na tle ostatnich dni) i pomóż mi kształtować zdrowe myślenie. Odnoś się do moich słów, bez ogólników, maks. ok. 130 słów, w punktach:\n- **Co dobrego widzę** – jedna konkretna rzecz z moich odpowiedzi.\n- **Pułapka myślenia** – tylko jeśli naprawdę jest: nazwij ją łagodnie i zacytuj krótki fragment; jeśli jej nie ma, pomiń ten punkt.\n- **Inne spojrzenie** – jedno zdrowsze, realistyczne zdanie, które mogę sobie powiedzieć.\n- **Mały krok na jutro** – jedna rzecz." }] })
-      .then(function (t) { var p = S.pa[k] || { a: ["", "", ""] }; p.m = t; p.mts = Date.now(); S.pa[k] = p; sv(); render(); });
-  });
+  if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); return; }
+  var td = k === key(new Date()), qs = dayQs(k), pa = S.pa[k] || { a: [] }, tx = ((S.n[k] || "").trim() ? "Notatka: " + S.n[k].trim() + "\n" : "") +
+    qs.map(function (q, i) { return pa.a[i] && pa.a[i].trim() ? q + " → " + pa.a[i].trim() : ""; }).filter(Boolean).join("\n") +
+    dEntries(k).map(function (e) { return e.text ? "\nWpis " + hm(e.t) + ": " + e.text.slice(0, 600) : ""; }).join("");
+  if (!tx.trim()) { toast("Najpierw coś zapisz albo odpowiedz na pytania dnia."); return; }
+  chatSend("🧠 Omów moje " + (td ? "dzisiejsze odpowiedzi" : "odpowiedzi z " + dshort(k)) + " w pamiętniku", { p: "MÓJ WPIS Z DNIA " + k + ":\n" + tx + "\n\nZADANIE: Przeczytaj mój wpis i odpowiedzi na pytania dnia (na tle ostatnich dni) i pomóż mi kształtować zdrowe myślenie. Odnoś się do moich słów, bez ogólników, maks. ok. 130 słów, w punktach:\n- **Co dobrego widzę** – jedna konkretna rzecz z moich odpowiedzi.\n- **Pułapka myślenia** – tylko jeśli naprawdę jest: nazwij ją łagodnie i zacytuj krótki fragment; jeśli jej nie ma, pomiń ten punkt.\n- **Inne spojrzenie** – jedno zdrowsze, realistyczne zdanie, które mogę sobie powiedzieć.\n- **Mały krok na jutro** – jedna rzecz." });
 }
 function doTmrw() {
   if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); return; }
-  go("ment"); chatSend("🍽️ Co zjeść jutro? Przeanalizuj moje jedzenie z ostatnich dni i zaproponuj prosty jadłospis.");
+  chatSend("🍽️ Co zjeść jutro?", { p: "Co zjeść jutro? Przeanalizuj moje jedzenie z ostatnich dni i zaproponuj prosty jadłospis na jutro." });
 }
 function doMQ(k) {
   return run("Mentor układa pytanie…", function () {
@@ -979,12 +989,34 @@ function doMQ(k) {
       .then(function (t) { var q = t.replace(/^["„\s]+|["”\s]+$/g, "").split("\n")[0]; var p = S.pa[k] || { a: ["", "", ""] }; p.q = dayQs(k).slice(); p.q[2] = q; S.pa[k] = p; sv(); render(); toast("✨ Nowe pytanie dodane jako trzecie"); });
   });
 }
-function chatSend(t) {
-  t = (t || "").trim(); if (!t) return;
-  S.mt.push({ r: "u", t: t, ts: Date.now() }); sv();
-  return run("Mentor pisze…", function () {
-    var hist = S.mt.slice(-20).map(function (m) { return { r: m.r, t: m.t }; });
-    return ai({ sys: sysPrompt() + "\n\nDANE UŻYTKOWNIKA:\n" + ctx(30), msgs: hist }).then(function (a) { S.mt.push({ r: "m", t: a, ts: Date.now() }); sv(); render(); var c = $("chatend"); if (c) c.scrollIntoView({ block: "end" }); });
+function chatSend(t, o) {
+  t = (t || "").trim(); o = o || {}; if (!t || busy) return;
+  var m = { r: "u", t: t, ts: Date.now() }; if (o.p) m.p = o.p; if (o.v) m.v = 1; if (o.im && o.im.length) m.im = o.im;
+  S.mt.push(m); if (S.mt.length > 800) S.mt = S.mt.slice(-800); sv();
+  chatDraft = ""; CHATV = false;
+  if (tab !== "ment") go("ment");
+  window.scrollTo(0, 0);
+  return chatAsk();
+}
+/* wysyła do AI rozmowę z dzisiaj (ostatnie wiadomości) i zapisuje odpowiedź */
+function chatAsk() {
+  var last = S.mt[S.mt.length - 1]; if (!last || last.r !== "u" || busy) return;
+  return run("Mentor myśli…", function () {
+    var td = key(new Date()), hist = [];
+    S.mt.filter(function (m) { return m === last || key(new Date(m.ts)) === td; }).slice(-20).forEach(function (m) {
+      var r = m.r === "u" ? "u" : "m", tx = m.p || m.t;
+      if (hist.length && hist[hist.length - 1].r === r) hist[hist.length - 1].t += "\n\n" + tx; else hist.push({ r: r, t: tx });
+    });
+    while (hist.length && hist[0].r !== "u") hist.shift();
+    var imgP = last.im ? Promise.all(last.im.slice(0, 4).map(function (id) { return MDB.get(id).then(function (b) { return b ? b2b64(b).then(function (x) { return { mime: b.type || "image/jpeg", b64: x }; }) : null; }); })) : Promise.resolve([]);
+    return imgP.then(function (imgs) {
+      imgs = (imgs || []).filter(Boolean); if (imgs.length) hist[hist.length - 1].img = imgs;
+      return ai({ sys: sysPrompt() + "\n\nDANE UŻYTKOWNIKA:\n" + ctx(30), msgs: hist });
+    }).then(function (a) {
+      S.mt.push({ r: "m", t: a, ts: Date.now() }); sv();
+      if (tab === "ment") render();
+      var md0 = S.set.tts.mode; if (md0 === "always" || (md0 === "voice" && last.v)) speak(a, S.mt.length - 1);
+    });
   });
 }
 function transcribeMedia(id) {
@@ -995,13 +1027,12 @@ function transcribeMedia(id) {
   });
 }
 function aiPic() {
-  readForm(); var im = CE.e.media.filter(function (m) { return m.k === "img"; }); if (!keyed().some(function (p) { return PROV[p].vision; })) { toast("Do analizy zdjęć potrzebny jest klucz Gemini, Claude, OpenAI lub OpenRouter."); return; }
-  return run("Mentor ogląda zdjęcie…", function () {
-    return Promise.all(im.slice(0, 4).map(function (m) { return MDB.get(m.id).then(function (b) { return b2b64(b).then(function (x) { return { mime: b.type || "image/jpeg", b64: x }; }); }); })).then(function (imgs) {
-      var c = (S.set.about ? "O mnie: " + S.set.about + "\n" : "") + (S.g.length ? "Moje cele: " + S.g.map(function (g) { return g.name; }).join("; ") + "\n" : "");
-      return ai({ sys: sysPrompt(), msgs: [{ r: "u", img: imgs, t: c + (CE.e.text ? "Mój opis: " + CE.e.text + "\n" : "") + "Przeanalizuj zdjęcie jako mój mentor. Jeśli jest na nim tekst (notatka, kartka, tablica) – najpierw przepisz go dokładnie. Jeśli to posiłek – krótko oceń go pod kątem zdrowego odżywiania i nawyków. W innym przypadku opisz krótko, co widzisz i jak ma się to do moich nawyków lub celów. Maks. 150 słów." }] });
-    }).then(function (t) { if (!CE) return; readForm(); CE.e.ai = t; showEntry(); });
-  });
+  readForm(); var im = CE.e.media.filter(function (m) { return m.k === "img"; });
+  if (!keyed().some(function (p) { return PROV[p].vision; })) { toast("Do analizy zdjęć potrzebny jest klucz Gemini, Claude, OpenAI lub OpenRouter."); return; }
+  var tx = CE.e.text || "", d = CE.e.d; saveEntry(); if (CE) return;
+  var c = (S.set.about ? "O mnie: " + S.set.about + "\n" : "") + (S.g.length ? "Moje cele: " + S.g.map(function (g) { return g.name; }).join("; ") + "\n" : "");
+  chatSend("📷 Co widzisz na moim zdjęciu z pamiętnika?" + (tx ? " – " + tx.slice(0, 80) + (tx.length > 80 ? "…" : "") : ""), { im: im.map(function (m) { return m.id; }),
+    p: c + "ZDJĘCIE Z MOJEGO PAMIĘTNIKA (" + d + ")" + (tx ? "\nMój opis: " + tx : "") + "\nPrzeanalizuj zdjęcie jako mój mentor. Jeśli jest na nim tekst (notatka, kartka, tablica) – najpierw przepisz go dokładnie. Jeśli to posiłek – krótko oceń go pod kątem zdrowego odżywiania i nawyków. W innym przypadku opisz krótko, co widzisz i jak ma się to do moich nawyków lub celów. Maks. 150 słów." });
 }
 function pjAI(mode) {
   pjRead(); var p = CP, base = "POMYSŁ: " + p.name + "\nOPIS: " + (p.desc || "(brak)") + "\nOBECNE KROKI: " + ((p.steps || []).map(function (s) { return s.t + (s.done ? " (zrobione)" : ""); }).join("; ") || "brak") + (S.set.about ? "\nO MNIE: " + S.set.about : "");
@@ -1017,28 +1048,102 @@ function pjAI(mode) {
   });
 }
 
+/* ---------- CZYTANIE ODPOWIEDZI NA GŁOS (synteza mowy w telefonie, bez klucza) ---------- */
+var TTS = { on: false, i: -1, unl: false }, CHATV = false, chatDraft = "";
+var FEMV = /zosia|zofia|paulina|agnieszka|ewa|maja|marta|anna|female|kobiet|żeńsk|oda|zfg|afb/i, MALEV = /marek|adam|jacek|krzysztof|male|męsk|bmg|jmk/i;
+function ttsOK() { return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window; }
+function plVoices() { if (!ttsOK()) return []; return speechSynthesis.getVoices().filter(function (v) { return /^pl/i.test(v.lang || ""); }); }
+function pickVoice() {
+  var vs = plVoices(), w = S.set.tts.voice;
+  if (w) { var f = vs.filter(function (v) { return v.voiceURI === w || v.name === w; })[0]; if (f) return f; }
+  return vs.filter(function (v) { return FEMV.test(v.name) && !MALEV.test(v.name); })[0] || vs.filter(function (v) { return !MALEV.test(v.name); })[0] || vs[0] || null;
+}
+/* tekst do czytania: bez formatowania, emoji i list */
+function sayText(t) {
+  return String(t || "").replace(/```[\s\S]*?```/g, " ").replace(/\[(.*?)\]\(.*?\)/g, "$1").replace(/\*\*|__|`|^#+\s*/gm, "").replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{20E3}]/gu, "").replace(/\s[–—]\s/g, ", ").replace(/\n+/g, ". ")
+    .replace(/:\s*\./g, ":").replace(/([.!?])\s*\./g, "$1").replace(/\s{2,}/g, " ").trim();
+}
+function speak(t, i) {
+  if (!ttsOK()) return; speechSynthesis.cancel();
+  var txt = sayText(t); if (!txt) return;
+  var parts = txt.match(/[^.!?…]+[.!?…]*\s*/g) || [txt], chunks = [], cur = "";
+  parts.forEach(function (x) { if ((cur + x).length > 200 && cur) { chunks.push(cur); cur = ""; } cur += x; }); if (cur.trim()) chunks.push(cur);
+  var v = pickVoice(), n = chunks.length; TTS.on = true; TTS.i = i == null ? -1 : i; ttsUi();
+  setTimeout(function () {
+    chunks.forEach(function (c, j) {
+      var u = new SpeechSynthesisUtterance(c.trim()); u.lang = "pl-PL"; if (v) u.voice = v; u.rate = +S.set.tts.rate || 1; u.pitch = 1;
+      u.onend = function () { if (j === n - 1) { TTS.on = false; TTS.i = -1; ttsUi(); } };
+      u.onerror = function () { if (j === n - 1 || !speechSynthesis.speaking) { TTS.on = false; TTS.i = -1; ttsUi(); } };
+      speechSynthesis.speak(u);
+    });
+  }, 60);
+}
+function ttsStop() { if (ttsOK()) speechSynthesis.cancel(); TTS.on = false; TTS.i = -1; ttsUi(); }
+function ttsUi() {
+  var b = $("ttsstop"); if (b) b.hidden = !TTS.on;
+  document.querySelectorAll('[data-a="say"]').forEach(function (x) { x.textContent = TTS.on && +x.getAttribute("data-i") === TTS.i ? "⏹️" : "🔊"; });
+}
+/* iPhone pozwala mówić dopiero po dotknięciu – „odblokowanie” przy wysyłaniu pytania */
+function ttsUnlock() { try { if (ttsOK() && !TTS.unl) { var u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); TTS.unl = true; } } catch (e) {} }
+if (ttsOK()) { try { speechSynthesis.getVoices(); speechSynthesis.addEventListener("voiceschanged", function () { if (tab === "ust" && !typing()) render(); }); } catch (e) {} }
+
 /* ---------- MENTOR ---------- */
+/* wiadomości → wymiany (pytanie + odpowiedź), z numerem wiadomości do przycisków 🔊 i 📋 */
+function exch(list) {
+  var out = [], cur = null;
+  list.forEach(function (m) { if (m.r === "u" || !cur) { cur = { u: m.r === "u" ? m : null, a: [] }; out.push(cur); if (m.r !== "u") cur.a.push(m); } else cur.a.push(m); });
+  return out;
+}
+function exHtml(x, state) {
+  var h = '<div class="chx">';
+  if (x.u) h += '<div class="bub u">' + (x.u.v ? "🎤 " : "") + esc(x.u.t) + (x.u.im ? '<div class="thumbs">' + x.u.im.map(function (id) { return '<img data-mid="' + id + '" data-a="full" alt="zdjęcie">'; }).join("") + "</div>" : "") + "<small>" + hm(x.u.ts) + "</small></div>";
+  x.a.forEach(function (m) { h += '<div class="bub m">' + md(m.t) + '<div class="bt"><small>' + hm(m.ts) + '</small><span style="flex:1"></span>' + (ttsOK() ? '<button class="ib" data-a="say" data-i="' + m.i + '" aria-label="Przeczytaj na głos">' + (TTS.on && TTS.i === m.i ? "⏹️" : "🔊") + "</button>" : "") + '<button class="ib" data-a="copym" data-i="' + m.i + '" aria-label="Kopiuj">📋</button></div></div>'; });
+  if (!x.a.length && state === "wait") h += '<div class="bub m think"><span class="dots"><i></i><i></i><i></i></span> ' + esc(busy || "Mentor myśli…") + "</div>";
+  if (!x.a.length && state === "err") h += '<div class="bub m err">⚠️ Brak odpowiedzi. <button class="sec sm" data-a="chatretry">Ponów</button></div>';
+  return h + "</div>";
+}
 function ment() {
-  var h = "";
-  if (!hasAI()) {
+  var h = "", td = key(new Date()), ok = hasAI();
+  if (!ok) {
     h += '<div class="card hl"><b>🧭 Połącz mentora AI</b><p style="font-size:14px;margin:6px 0">Mentor analizuje Twoje nawyki, pamiętnik i jedzenie, proponuje jadłospis na jutro, robi przegląd tygodnia, zadaje pytania i pomaga dostrzec, nad czym warto popracować. Potrzebny jest tylko jeden klucz – resztę aplikacja ustawi sama.</p></div>' + keyBox(false) + keyHelp(true);
   }
+  /* pole pytania – na górze */
+  h += '<div class="card chatbox"><div class="tw"><textarea id="chatin" data-f="chatd" placeholder="Zapytaj mentora – napisz albo dotknij 🎤 i mów" style="min-height:64px;padding-right:52px">' + esc(chatDraft) + "</textarea>" + micBtn("chatin") + "</div>" +
+    '<div class="btns" style="margin-top:8px;align-items:center"><button class="pri" data-a="chats"' + (busy || !ok ? " disabled" : "") + ">" + (busy ? "⏳ Mentor myśli…" : "Wyślij") + "</button>" +
+    '<button class="sec" id="ttsstop" data-a="ttsstop"' + (TTS.on ? "" : " hidden") + ">⏹️ Zatrzymaj czytanie</button>" +
+    (ttsOK() && S.set.tts.mode !== "never" ? '<span class="note" style="margin-left:auto">🔊 ' + (S.set.tts.mode === "always" ? "czytam odpowiedzi" : "czytam, gdy pytasz głosem") + "</span>" : "") + "</div>" +
+    '<div class="qa">' + [["rev", "📊 Przegląd tygodnia"], ["tmrw", "🍽️ Co zjeść jutro?"], ["think", "🧠 Omów mój pamiętnik"], ["mq", "❓ Pytanie do pamiętnika"]].map(function (x) { return '<button class="tag" data-a="' + x[0] + '" data-k="' + td + '"' + (busy || !ok ? " disabled" : "") + ">" + x[1] + "</button>"; }).join("") + "</div>" +
+    '<details class="qmore"><summary class="note">💡 Inne pytania</summary><div style="margin-top:6px">' + ["Nad czym powinienem teraz popracować?", "Dlaczego odpuszczam niektóre nawyki?", "Jakie wzorce widzisz w moim pamiętniku?", "Pomóż mi zaplanować jutro", "Który nawyk ma największy wpływ na mój dzień?", "Jak moje jedzenie wpływa na nawyki i samopoczucie?", "Jakie pułapki myślenia widzisz w moich odpowiedziach w pamiętniku?"].map(function (q) { return '<span class="tag" data-a="chatq" data-id="' + esc(q) + '">' + esc(q) + "</span>"; }).join("") + "</div></details></div>";
+  /* trwające zadanie, które nie jest rozmową (przegląd, pytanie do pamiętnika) */
+  var lastM = S.mt[S.mt.length - 1], chatWait = busy && lastM && lastM.r === "u";
+  if (busy && !chatWait) h += '<div class="card think"><span class="dots"><i></i><i></i><i></i></span> ' + esc(busy) + "</div>";
+  /* dzisiejsza rozmowa – najnowsza na górze */
+  var all = S.mt.map(function (m, i) { return Object.assign({}, m, { i: i }); }), today = all.filter(function (m) { return key(new Date(m.ts)) === td; }), old = all.filter(function (m) { return key(new Date(m.ts)) !== td; });
+  var ex = exch(today).reverse();
+  if (ex.length) h += '<h3>💬 Dzisiaj</h3>' + ex.map(function (x, j) { var st = j === 0 && !x.a.length && x.u ? (chatWait ? "wait" : "err") : ""; return exHtml(x, st); }).join("");
+  else if (ok && !busy) h += '<div class="note" style="margin:4px 2px 14px">Zapytaj o cokolwiek – mentor zna Twoje nawyki, pamiętnik i jedzenie z ostatnich 30 dni. Wcześniejsze rozmowy znajdziesz w archiwum na dole.</div>';
+  /* przegląd tygodnia */
+  if (S.rev.length) {
+    var r = S.rev[S.rev.length - 1], sug = parseList(r.text, /do pracy/i), fresh = Date.now() - r.ts < 2 * 864e5;
+    h += '<details class="card" id="revcard"' + (fresh ? " open" : "") + '><summary><b>📊 Przegląd tygodnia · ' + dshort(r.k) + "</b></summary>" + '<div class="ai" style="background:none;padding:0;margin-top:8px">' + md(r.text) + "</div>";
+    if (sug.length) h += '<div class="btns" style="margin-top:8px">' + sug.map(function (s, i) { var have = S.fc.some(function (f) { return f.t === s; }); return '<button class="sec sm" data-a="fcsug" data-i="' + i + '"' + (have ? " disabled" : "") + ">" + (have ? "✓ " : "➕ ") + esc(s.length > 50 ? s.slice(0, 50) + "…" : s) + "</button>"; }).join("") + "</div>";
+    if (S.rev.length > 1) h += '<details style="margin-top:10px"><summary class="note">Wcześniejsze przeglądy (' + (S.rev.length - 1) + ")</summary>" + S.rev.slice(0, -1).reverse().map(function (x) { return '<div class="ent"><b>' + dshort(x.k) + "</b>" + md(x.text) + "</div>"; }).join("") + "</details>";
+    h += "</details>"; lastRev = sug;
+  }
+  /* do pracy */
   var fc = S.fc.filter(function (x) { return !x.done; }), fd = S.fc.filter(function (x) { return x.done; });
   h += '<div class="card"><h3>🎯 Do pracy</h3>' + (fc.length ? fc.map(function (x) { return '<div class="step"><button class="ck" data-a="fcdone" data-id="' + x.id + '"></button><span style="flex:1;font-size:14px">' + esc(x.t) + '<small class="note" style="display:block">od ' + new Date(x.ts).toLocaleDateString("pl-PL") + '</small></span><button class="ib" data-a="fcrm" data-id="' + x.id + '">✕</button></div>'; }).join("") : '<div class="note">Pusto. Mentor zaproponuje rzeczy do pracy w przeglądzie tygodnia – możesz też dopisać własne.</div>') +
     '<div class="btns" style="flex-wrap:nowrap;margin-top:8px"><input id="fcn" placeholder="Nad czym chcę popracować…" style="flex:1"><button class="sec" data-a="fcadd">+</button></div>' + (fd.length ? '<div class="note" style="margin-top:6px">Zrobione: ' + fd.length + "</div>" : "") + "</div>";
-  h += '<div class="btns" style="margin-bottom:12px"><button class="pri" data-a="rev"' + (busy || !hasAI() ? " disabled" : "") + '>📊 Przegląd tygodnia</button><button class="sec" data-a="mq" data-k="' + key(new Date()) + '"' + (busy || !hasAI() ? " disabled" : "") + ">❓ Pytanie na dziś</button></div>";
-  if (busy) h += '<div class="busy">⏳ ' + esc(busy) + "</div>";
-  if (S.rev.length) {
-    var r = S.rev[S.rev.length - 1], sug = parseList(r.text, /do pracy/i);
-    h += '<div class="card"><h3>📊 Ostatni przegląd · ' + dshort(r.k) + "</h3>" + '<div class="ai" style="background:none;padding:0">' + md(r.text) + "</div>";
-    if (sug.length) h += '<div class="btns" style="margin-top:8px">' + sug.map(function (s, i) { var have = S.fc.some(function (f) { return f.t === s; }); return '<button class="sec sm" data-a="fcsug" data-i="' + i + '"' + (have ? " disabled" : "") + ">" + (have ? "✓ " : "➕ ") + esc(s.length > 50 ? s.slice(0, 50) + "…" : s) + "</button>"; }).join("") + "</div>";
-    if (S.rev.length > 1) h += '<details style="margin-top:10px"><summary class="note">Wcześniejsze przeglądy (' + (S.rev.length - 1) + ")</summary>" + S.rev.slice(0, -1).reverse().map(function (x) { return '<div class="ent"><b>' + dshort(x.k) + "</b>" + md(x.text) + "</div>"; }).join("") + "</details>";
-    h += "</div>"; lastRev = sug;
+  /* archiwum – wcześniejsze dni, zwinięte */
+  if (old.length) {
+    var byDay = {}; old.forEach(function (m) { var k = key(new Date(m.ts)); (byDay[k] = byDay[k] || []).push(m); });
+    var days = Object.keys(byDay).sort().reverse();
+    h += '<details class="card arch"><summary><b>🗂️ Archiwum rozmów</b> <span class="note">(' + days.length + " " + pl(days.length, "dzień", "dni", "dni") + ")</span></summary>" +
+      days.map(function (k) { var ee = exch(byDay[k]), q = ee.filter(function (x) { return x.u; })[0]; return '<details class="aday"><summary>' + dshort(k) + ' <span class="note">· ' + ee.length + " · " + esc(q ? q.u.t.slice(0, 48) + (q.u.t.length > 48 ? "…" : "") : "") + "</span></summary>" + ee.reverse().map(function (x) { return exHtml(x, ""); }).join("") + "</details>"; }).join("") +
+      '<button class="lnk dng" data-a="chatclr" style="margin-top:10px">🗑 Usuń całą historię rozmów</button></details>';
   }
-  h += '<div class="card"><h3>💬 Rozmowa z mentorem</h3><div class="chat">' + (S.mt.length ? S.mt.slice(-30).map(function (m) { return '<div class="bub ' + m.r + '">' + (m.r === "m" ? md(m.t) : esc(m.t)) + "</div>"; }).join("") : '<div class="note">Zapytaj o cokolwiek – mentor zna Twoje dane z ostatnich 30 dni.</div>') + '<div id="chatend"></div></div>';
-  h += '<div style="margin-bottom:8px">' + ["Nad czym powinienem teraz popracować?", "Dlaczego odpuszczam niektóre nawyki?", "Jakie wzorce widzisz w moim pamiętniku?", "Pomóż mi zaplanować jutro", "Który nawyk ma największy wpływ na mój dzień?", "🍽️ Co zjeść jutro?", "Jak moje jedzenie wpływa na nawyki i samopoczucie?", "Jakie pułapki myślenia widzisz w moich odpowiedziach w pamiętniku?"].map(function (q) { return '<span class="tag" data-a="chatq" data-id="' + esc(q) + '">' + esc(q) + "</span>"; }).join("") + "</div>";
-  h += '<div class="tw"><textarea id="chatin" placeholder="Napisz albo dotknij 🎤…" style="min-height:70px;padding-right:52px"></textarea>' + micBtn("chatin") + '</div><div class="btns" style="margin-top:8px;justify-content:space-between"><button class="pri" data-a="chats"' + (busy || !hasAI() ? " disabled" : "") + '>Wyślij</button>' + (S.mt.length ? '<button class="lnk" data-a="chatclr">Wyczyść rozmowę</button>' : "") + "</div></div>";
-  h += '<div class="note">Mentor: ' + TONES[S.set.tone][0] + " · " + (hasAI() ? (LASTM || prov().n) : "brak klucza") + ". Co widzi mentor: " + [S.set.share.h && "nawyki", S.set.share.d && "pamiętnik", S.set.share.t && "jedzenie", S.set.share.f && on("fast") && "post", S.set.share.p && on("proj") && "projekty"].filter(Boolean).join(", ") + ". Zmienisz to w Ustawieniach. Dane są wysyłane do wybranego dostawcy AI tylko, gdy korzystasz z mentora.</div>";
+  h += '<div class="note">Mentor: ' + TONES[S.set.tone][0] + " · " + (ok ? (LASTM || prov().n) : "brak klucza") + ". Co widzi mentor: " + [S.set.share.h && "nawyki", S.set.share.d && "pamiętnik", S.set.share.t && "jedzenie", S.set.share.f && on("fast") && "post", S.set.share.p && on("proj") && "projekty"].filter(Boolean).join(", ") + ". Zmienisz to w Ustawieniach. Dane są wysyłane do wybranego dostawcy AI tylko, gdy korzystasz z mentora.</div>";
   return h;
 }
 
@@ -1197,6 +1302,13 @@ function ust() {
   } else { h += keyBox(true) + keyHelp(true); }
   h += '<h3>Charakter mentora</h3><div class="card">' + Object.keys(TONES).map(function (t) { return '<label class="sw"><input type="radio" name="tone" data-f="tone" value="' + t + '"' + (S.set.tone === t ? " checked" : "") + "> " + TONES[t][0] + "</label>"; }).join("");
   h += '<label class="note">O mnie – co mentor powinien wiedzieć (cele, wartości, sytuacja)</label><div class="tw"><textarea id="about" data-f="about" placeholder="np. Pracuję przy biurku, chcę wzmocnić plecy, nauczyć się hiszpańskiego i rozwijać duchowo. Ważna jest dla mnie rodzina. Lubię konkretne rady.">' + esc(S.set.about) + "</textarea>" + micBtn("about") + "</div>";
+  var tv = plVoices(), tm = S.set.tts.mode;
+  h += '<div style="margin-top:12px"><b style="font-size:14px">🔊 Czytanie odpowiedzi na głos</b>' + [["voice", "Gdy pytam głosem (🎤)"], ["always", "Zawsze"], ["never", "Nigdy"]].map(function (x) { return '<label class="sw"><input type="radio" name="ttsm" data-f="ttsm" value="' + x[0] + '"' + (tm === x[0] ? " checked" : "") + "> " + x[1] + "</label>"; }).join("") +
+    (!ttsOK() ? '<div class="note">Ta przeglądarka nie potrafi czytać na głos.</div>' :
+      (tv.length ? '<label class="note">Głos</label><select data-f="ttsv"><option value="">Automatycznie (żeński, jeśli jest)</option>' + tv.map(function (v) { return '<option value="' + esc(v.voiceURI || v.name) + '"' + (S.set.tts.voice === (v.voiceURI || v.name) ? " selected" : "") + ">" + esc(v.name) + "</option>"; }).join("") + "</select>"
+        : '<div class="note">Nie widzę polskiego głosu. Na Androidzie: Ustawienia telefonu → Zamiana tekstu na mowę → Usługi mowy Google → zainstaluj język polski.</div>') +
+      '<label class="note">Tempo</label><select data-f="ttsr">' + [["0.85", "Wolniej"], ["1", "Normalnie"], ["1.15", "Szybciej"], ["1.3", "Szybko"]].map(function (x) { return '<option value="' + x[0] + '"' + (String(S.set.tts.rate) === x[0] ? " selected" : "") + ">" + x[1] + "</option>"; }).join("") + "</select>" +
+      '<div class="btns" style="margin-top:8px"><button class="sec sm" data-a="ttstest">▶️ Posłuchaj</button></div>') + "</div>";
   h += '<details style="margin-top:10px"><summary class="note">🔐 Prywatność – co mentor może widzieć</summary>' + [["h", "Nawyki i serie"], ["d", "Pamiętnik i odpowiedzi"], ["t", "Jedzenie, płyny, kroki i waga"], ["f", "Post przerywany"], ["p", "Pomysły i projekty"]].filter(function (x) { return x[0] === "f" ? on("fast") : x[0] === "p" ? on("proj") : true; }).map(function (x) { return '<label class="sw"><input type="checkbox" data-f="share" value="' + x[0] + '"' + (S.set.share[x[0]] ? " checked" : "") + "> " + x[1] + "</label>"; }).join("") + '<div class="note">Dane wysyłane są do dostawcy AI tylko, gdy korzystasz z mentora.</div></details></div>';
   h += '<h3>🔒 Blokada hasłem</h3><div class="card">' + (LK ? '<div class="note" style="margin-bottom:8px">✅ Aplikacja jest chroniona hasłem. Blokuje się przy uruchomieniu i po 1 minucie w tle.</div><div class="btns"><button class="sec" data-a="lockset">Zmień hasło</button><button class="sec" data-a="locknow">🔒 Zablokuj teraz</button><button class="sec dng" data-a="lockoff">Wyłącz blokadę</button></div>' :
     '<div class="note" style="margin-bottom:8px">Ustaw hasło lub PIN – nikt nie zajrzy do Twojego pamiętnika, gdy weźmie telefon.</div><button class="pri" data-a="lockset">🔒 Ustaw hasło</button>') + "</div>";
@@ -1285,6 +1397,7 @@ function render() {
   if (locked && LK) { $("v").innerHTML = ""; $("tabs").innerHTML = ""; tzShow(false); closeSheet(true); showLock(); return; }
   document.documentElement.setAttribute("data-theme", S.set.theme === "auto" ? "" : S.set.theme);
   tzShow(tab === "jedz");
+  document.body.classList.toggle("mton", tab === "ment");
   var n = new Date(), hr = n.getHours(), sub = SUBS[tab];
   $("gr").textContent = sub ? sub : tab === "pam" ? "📔 Pamiętnik" : tab === "post" ? "📈 Postęp" : tab === "ment" ? "🧭 Mentor" : tab === "jedz" ? "🍽️ Jedzenie" : tab === "wiecej" ? "Więcej" : hr < 12 ? "Dzień dobry!" : hr < 18 ? "Miłego dnia!" : "Dobry wieczór!";
   $("dt").innerHTML = sub ? '<button class="lnk" data-a="tab" data-id="wiecej" style="font-size:13px;padding:0">‹ Więcej</button>' : n.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }) + " · 🔥 " + streak() + " · 📔 " + dStreak();
@@ -1390,7 +1503,7 @@ document.addEventListener("click", function (ev) {
     case "v4ok": S.set.v4ok = 1; sv(); render(); break;
     case "tzgo": tzGo(id); break;
     case "tmrw": doTmrw(); break;
-    case "think": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doThink(t.getAttribute("data-k")); break;
+    case "think": doThink(t.getAttribute("data-k") || key(new Date())); break;
     case "wgset": wgSheet(); break;
     case "wgpick": S.wg = { wk: monKey(), g: id, n: (S.wg && S.wg.n) || 5 }; sv(); wgSheet(); break;
     case "wgn": if (!S.wg) { toast("Najpierw wybierz cel."); break; } S.wg.n = +id; sv(); wgSheet(); break;
@@ -1421,9 +1534,14 @@ document.addEventListener("click", function (ev) {
     case "pexp": pexp[t.getAttribute("data-k")] = 1; $("plist").innerHTML = pamList(); hydrate(); break;
     case "mq": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doMQ(t.getAttribute("data-k")); break;
     case "rev": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doReview(); break;
-    case "chats": { var ci = $("chatin"); if (ci && ci.value.trim()) { var v2 = ci.value; stopDict(); chatSend(v2); } break; }
-    case "chatq": if (/^🍽️ Co zjeść jutro/.test(id)) doTmrw(); else chatSend(id); break;
-    case "chatclr": if (confirm("Wyczyścić rozmowę z mentorem?")) { S.mt = []; sv(); render(); } break;
+    case "chats": { var ci = $("chatin"); if (ci && ci.value.trim()) { var v2 = ci.value, vv = CHATV; stopDict(); if (S.set.tts.mode === "always" || (S.set.tts.mode === "voice" && vv)) ttsUnlock(); chatSend(v2, { v: vv }); } break; }
+    case "chatretry": chatAsk(); break;
+    case "say": { var si = +t.getAttribute("data-i"), sm = S.mt[si]; if (TTS.on && TTS.i === si) ttsStop(); else if (sm) { ttsUnlock(); speak(sm.t, si); } break; }
+    case "copym": { var cm = S.mt[+t.getAttribute("data-i")]; if (cm) { try { navigator.clipboard.writeText(cm.t).then(function () { toast("📋 Skopiowano"); }, function () { toast("Nie udało się skopiować."); }); } catch (e) { toast("Nie udało się skopiować."); } } break; }
+    case "ttsstop": ttsStop(); break;
+    case "ttstest": ttsUnlock(); speak("Cześć! Tak będę czytać odpowiedzi mentora. Możesz zmienić głos i tempo.", -1); break;
+    case "chatq": chatSend(id); break;
+    case "chatclr": if (confirm("Usunąć całą historię rozmów z mentorem (także archiwum)?")) { S.mt = []; sv(); render(); } break;
     case "fcadd": { var fi = $("fcn"); if (fi && fi.value.trim()) { S.fc.push({ id: uid("f"), t: fi.value.trim(), ts: Date.now(), done: 0 }); sv(); render(); } break; }
     case "fcsug": { var s = lastRev && lastRev[+t.getAttribute("data-i")]; if (s) { S.fc.push({ id: uid("f"), t: s, ts: Date.now(), done: 0 }); sv(); render(); toast("Dodano do „Do pracy” – zobaczysz to na ekranie Dziś"); } break; }
     case "fcdone": { var fc = S.fc.find(function (x) { return x.id === id; }); if (fc) { fc.done = 1; fc.dt = Date.now(); sv(); y = window.scrollY; render(); window.scrollTo(0, y); toast("Brawo! 🎉"); } break; }
@@ -1507,6 +1625,7 @@ document.addEventListener("input", function (ev) {
   if (f === "n") { var k = t.getAttribute("data-k"); if (t.value.trim()) S.n[k] = t.value; else delete S.n[k]; sv(); return; }
   if (f === "pa") { var k2 = t.getAttribute("data-k"), p = S.pa[k2] || { a: ["", "", ""] }; if (!p.q) p.q = dayQs(k2).slice(); p.a[+t.getAttribute("data-i")] = t.value; S.pa[k2] = p; sv(); return; }
   if (f === "about") { S.set.about = t.value; sv(); return; }
+  if (f === "chatd") { chatDraft = t.value; if (!t.value.trim()) CHATV = false; return; }
   if (f === "exf" && t.getAttribute("data-j") === "4") { S.ex[t.getAttribute("data-m")][+t.getAttribute("data-i")][4] = t.value; sv(); return; }
   if (t.id === "gp") { $("gpv").textContent = t.value + "%"; }
 });
@@ -1521,6 +1640,9 @@ document.addEventListener("change", function (ev) {
   if (!f || f === "n" || f === "pa" || f === "about") return;
   if (f === "fg") { S.fg = Math.max(1, Math.min(48, +t.value || 16)); sv(); render(); return; }
   if (f === "tone") { S.set.tone = t.value; sv(); return; }
+  if (f === "ttsm") { S.set.tts.mode = t.value; sv(); if (t.value === "never") ttsStop(); return; }
+  if (f === "ttsv") { S.set.tts.voice = t.value; sv(); return; }
+  if (f === "ttsr") { S.set.tts.rate = +t.value || 1; sv(); return; }
   if (f === "share") { S.set.share[t.value] = t.checked ? 1 : 0; sv(); return; }
   if (f === "evOn") { S.set.ev.on = t.checked ? 1 : 0; sv(); if (t.checked && "Notification" in window && Notification.permission === "default") Notification.requestPermission(); return; }
   if (f === "evT") { S.set.ev.t = t.value || "18:00"; sv(); return; }
@@ -1542,7 +1664,7 @@ document.addEventListener("toggle", function (ev) { var d = ev.target, c = d.get
 document.addEventListener("keydown", function (ev) { if (ev.key === "Enter" && !ev.shiftKey) { if (ev.target.id === "lpw") { ev.preventDefault(); tryUnlock(); return; } if (ev.target.id === "newkey") { ev.preventDefault(); document.querySelector('[data-a="ksave"]').click(); return; } if (ev.target.id === "pjns") { ev.preventDefault(); document.querySelector('[data-a="psa"]').click(); } else if (ev.target.id === "fcn") { ev.preventDefault(); document.querySelector('[data-a="fcadd"]').click(); } } if (ev.key === "Escape" && $("sheet").innerHTML) closeSheet(); });
 
 document.addEventListener("visibilitychange", function () { if (document.hidden) hiddenAt = Date.now(); else if (LK && !locked && hiddenAt && Date.now() - hiddenAt > 60000) { locked = true; render(); } });
-tzLinksInit(); v41Init(); syncKeys();
+tzLinksInit(); v41Init(); v42Init(); syncKeys();
 try { if (localStorage.getItem("talerz:theme") !== (S.set.theme || "auto")) localStorage.setItem("talerz:theme", S.set.theme || "auto"); } catch (e) {}
 (function () { var a = new URLSearchParams(location.search).get("akcja"); if (a === "posilek" || a === "woda") { try { history.replaceState({ nawTab: tab, d: 0 }, "", location.pathname); } catch (e) {} tzPend = a; tab = "jedz"; } })();
 document.addEventListener("visibilitychange", function () { if (!document.hidden) { wgInit(); tzChanged(); } });

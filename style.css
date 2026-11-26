@@ -176,3 +176,31 @@ body.tzon main,body.tzon .fab{display:none}
 .opt.on{border-color:var(--ac);background:var(--ac2);font-weight:700}
 .ai.think{margin-top:10px;font-size:14px}
 .ai.think b:first-child{display:block;margin-bottom:4px}
+/* ---------- 4.2: zakładka Mentor ---------- */
+.chatbox{position:relative}
+.chatbox textarea{font-size:15px}
+.qa{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+button.tag{font:inherit;font-size:13px;cursor:pointer;color:var(--tx)}
+button.tag:disabled{opacity:.5;cursor:default}
+.qmore{margin-top:8px}
+.qmore summary{cursor:pointer}
+.chx{display:flex;flex-direction:column;gap:6px;margin:0 0 14px;text-align:left}
+.bub small{display:block;font-size:11px;opacity:.7;margin-top:4px}
+.bub.u small{text-align:right}
+.bub .thumbs{margin-top:6px}
+.bub .thumbs img{max-width:120px;max-height:120px;border-radius:8px}
+.bub .bt{display:flex;align-items:center;gap:2px;margin-top:4px}
+.bub .bt small{margin:0}
+.bub .bt .ib{font-size:15px;padding:2px 6px}
+.bub.m.err{border-color:var(--warn);background:var(--warn2)}
+.think{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:14px}
+.card.think{margin-bottom:12px}
+.dots{display:inline-flex;gap:4px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--ac);opacity:.3;animation:dotp 1.2s infinite ease-in-out}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@keyframes dotp{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1.1)}}
+#revcard summary,.arch summary,.aday summary{cursor:pointer}
+.aday{border-top:1px solid var(--bd);padding:8px 0}
+.aday[open] summary{margin-bottom:8px}
+.aday .chx{margin-bottom:10px}
+body.mton .fab{display:none}
