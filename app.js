@@ -1,7 +1,7 @@
-/* Nawyki i Talerz 4.2 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
+/* Nawyki i Talerz 4.4 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
 (function () {
 "use strict";
-var VER = "4.2";
+var VER = "4.4";
 var KEY = "nawyki-v3", OLD = "nawyki-v2", KEYS = "nawyki-v3-klucze";
 var CATS = NAW.CATS, LV = NAW.LV, ST = NAW.ST, ET = NAW.ET, PROV = NAW.PROV;
 
@@ -349,7 +349,7 @@ function dayQs(k) {
 var tab = "dzis", off = 0, ed = false, edr = false, edy = false, edx = false, P = null, fired = {};
 var pq = "", ptag = "", plim = 20, pexp = {}, pview = "list", pfilt = "all", rg = 30, busy = "", lastRev = null;
 var TABS = [["dzis", "🏠", "Dziś"], ["jedz", "🍽️", "Jedzenie"], ["pam", "📔", "Pamiętnik"], ["post", "📈", "Postęp"], ["ment", "🧭", "Mentor"], ["wiecej", "☰", "Więcej"]];
-var SUBS = { proj: "💡 Pomysły i projekty", cele: "🎯 Cele", roz: "🤸 Rozruch", ryt: "⏰ Rytm dnia", fast: "🌙 Post przerywany", rap: "📊 Raport i eksport", ust: "⚙️ Ustawienia i AI", dane: "💾 Kopie i dane" };
+var SUBS = { diag: "🔧 Diagnostyka AI", proj: "💡 Pomysły i projekty", cele: "🎯 Cele", roz: "🤸 Rozruch", ryt: "⏰ Rytm dnia", fast: "🌙 Post przerywany", rap: "📊 Raport i eksport", ust: "⚙️ Ustawienia i AI", dane: "💾 Kopie i dane" };
 
 function qf(q) { var i = q.lastIndexOf(" — "); return i > 0 ? "„" + esc(q.slice(0, i)) + "” — " + esc(q.slice(i + 3)) : "„" + esc(q) + "”"; }
 function qt() { var a = S.q.length ? S.q : NAW.QD; return a[Math.floor(Date.now() / 864e5) % a.length]; }
@@ -843,9 +843,12 @@ function ai(o) {
       var ch = chainOf(p);
       function tryM(mi) {
         if (mi >= ch.length) return tryP(pi + 1, round);
+        var t0 = Date.now(), src = needAud ? "Nagranie" : needImg ? "Mentor 📷" : "Mentor";
         return call1(p, ch[mi], o).then(function (t) {
+          logAi({ p: p, m: ch[mi], ok: 1, ms: Date.now() - t0, src: src });
           var c = cfg(p); if (c.ok !== ch[mi]) { c.ok = ch[mi]; svK(); } if (S.set.lastP !== p) { S.set.lastP = p; sv(); } LASTM = PROV[p].n + " · " + ch[mi]; return t;
         }, function (e) {
+          logAi({ p: p, m: ch[mi], ok: 0, ms: Date.now() - t0, st: e.status, msg: String(e.message || "").slice(0, 160), src: src });
           errs.push({ p: p, e: e });
           if (e.status === 401 || e.status === 403 || e.status === 402) return tryP(pi + 1, round);
           if (e.status === 404 && cfg(p).ok === ch[mi]) { cfg(p).ok = ""; ensureModels(p, true); }
@@ -1088,6 +1091,214 @@ function ttsUi() {
 function ttsUnlock() { try { if (ttsOK() && !TTS.unl) { var u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); TTS.unl = true; } } catch (e) {} }
 if (ttsOK()) { try { speechSynthesis.getVoices(); speechSynthesis.addEventListener("voiceschanged", function () { if (tab === "ust" && !typing()) render(); }); } catch (e) {} }
 
+/* ---------- DIAGNOSTYKA KLUCZY AI ---------- */
+var AILOGK = "nawyki-v3-ailog", DG = { busy: 0, r: {} };
+var DGV = { ok: ["🟢", "Działa"], warn: ["🟡", "Działa z ograniczeniami"], bad: ["🔴", "Nie działa"], net: ["⚪", "Nie da się sprawdzić"], run: ["⏳", "Sprawdzam…"] };
+var DGI = { ok: "✅", warn: "⚠️", bad: "❌", info: "ℹ️" };
+var PFX = { gemini: "„AQ.” lub „AIza”", claude: "„sk-ant-”", openai: "„sk-”", groq: "„gsk_”", openrouter: "„sk-or-”" };
+function logAi(e) { try { var l = JSON.parse(localStorage.getItem(AILOGK) || "[]"); e.at = Date.now(); l.unshift(e); localStorage.setItem(AILOGK, JSON.stringify(l.slice(0, 40))); } catch (x) {} }
+function maskK(k) { k = String(k || "").trim(); return k.length > 12 ? k.slice(0, 6) + "…" + k.slice(-4) : "••••"; }
+function tzAiCfg() { try { return JSON.parse(localStorage.getItem("talerz:ai-config") || "{}"); } catch (e) { return {}; } }
+/* wszystkie klucze obu części (Mentor i Jedzenie), każdy tylko raz */
+function dgItems() {
+  var it = [], by = {};
+  PORDER.forEach(function (p) { var k = cfg(p).k; if (k) { var x = { id: "n_" + p, p: p, k: k, w: ["Mentor"] }; by[k.trim()] = x; it.push(x); } });
+  var ks = tzAiCfg().keys || {};
+  ["gemini", "claude"].forEach(function (p) {
+    (ks[p] || []).forEach(function (t) {
+      var k = String(t.key || ""); if (!k.trim()) return;
+      var x = by[k.trim()];
+      if (x) { if (x.w.indexOf("Jedzenie") < 0) x.w.push("Jedzenie"); if (!x.tz) x.tz = { p: p, id: t.id }; return; }
+      x = { id: "t_" + p + "_" + t.id, p: p, k: k, w: ["Jedzenie"], tz: { p: p, id: t.id }, lab: t.label || "" }; by[k.trim()] = x; it.push(x);
+    });
+  });
+  return it;
+}
+function dgSum() {
+  var it = dgItems(); if (!it.length) return "brak kluczy";
+  var rs = it.map(function (x) { return DG.r[x.id]; }).filter(Boolean);
+  if (rs.some(function (r) { return r.v === "bad"; })) return "⚠️ problem z kluczem";
+  if (rs.length === it.length && rs.every(function (r) { return r.v === "ok"; })) return "✅ wszystko działa";
+  return it.length + " " + pl(it.length, "klucz", "klucze", "kluczy") + " · testuj";
+}
+/* jedno zapytanie testowe: lista modeli albo krótka odpowiedź; zwraca pełny błąd do diagnozy */
+function dgReq(p, k, kind, model) {
+  var u, o = { headers: {} }, t0 = Date.now(), kk = String(k).trim(), q = "Odpowiedz jednym krótkim zdaniem po polsku, że mnie słyszysz.";
+  if (kind === "models") {
+    if (p === "gemini") { u = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200"; o.headers = { "x-goog-api-key": kk }; }
+    else if (p === "claude") { u = "https://api.anthropic.com/v1/models?limit=100"; o.headers = { "x-api-key": kk, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }; }
+    else { u = PROV[p].base + "/models"; o.headers = { Authorization: "Bearer " + kk }; }
+  } else {
+    o.method = "POST";
+    if (p === "gemini") { u = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent"; o.headers = { "Content-Type": "application/json", "x-goog-api-key": kk }; o.body = JSON.stringify({ contents: [{ role: "user", parts: [{ text: q }] }] }); }
+    else if (p === "claude") { u = "https://api.anthropic.com/v1/messages"; o.headers = { "content-type": "application/json", "x-api-key": kk, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }; o.body = JSON.stringify({ model: model, max_tokens: 80, messages: [{ role: "user", content: q }] }); }
+    else { u = PROV[p].base + "/chat/completions"; o.headers = { "Content-Type": "application/json", Authorization: "Bearer " + kk }; o.body = JSON.stringify({ model: model, messages: [{ role: "user", content: q }] }); }
+  }
+  return fetchT(u, o, kind === "models" ? 20000 : 45000).then(function (r) {
+    return r.text().then(function (tx) { var j = {}; try { j = JSON.parse(tx); } catch (e) {} return { st: r.status, ok: r.ok, j: j, tx: tx, ms: Date.now() - t0 }; });
+  }, function (e) { return { st: 0, ok: false, j: {}, tx: e.message, ms: Date.now() - t0 }; });
+}
+function dgIds(p, j) {
+  if (p === "gemini") return (j.models || []).filter(function (m) { return (m.supportedGenerationMethods || []).indexOf("generateContent") >= 0; }).map(function (m) { return String(m.name).replace(/^models\//, ""); });
+  return (j.data || []).map(function (m) { return m.id; });
+}
+function dgText(p, j) {
+  if (p === "gemini") { var c = j.candidates && j.candidates[0]; return c && c.content ? (c.content.parts || []).filter(function (x) { return !x.thought; }).map(function (x) { return x.text || ""; }).join("").trim() : ""; }
+  if (p === "claude") return (j.content || []).map(function (x) { return x.text || ""; }).join("").trim();
+  var m = j.choices && j.choices[0] && j.choices[0].message, t = m && m.content; if (Array.isArray(t)) t = t.map(function (x) { return x.text || ""; }).join(""); return String(t || "").trim();
+}
+function dgRetry(j) {
+  var d = (j && j.error && j.error.details) || [];
+  for (var i = 0; i < d.length; i++) if (d[i] && d[i].retryDelay) { var s = parseFloat(d[i].retryDelay); return s >= 60 ? Math.ceil(s / 60) + " min" : Math.ceil(s) + " s"; }
+  var m = /retry in ([\d.]+)\s*s/i.exec((j && j.error && j.error.message) || ""); return m ? Math.ceil(+m[1]) + " s" : "";
+}
+/* dzienny limit Gemini odnawia się o północy czasu pacyficznego (w Polsce ok. 9:00) */
+function pacificReset() {
+  try {
+    var q = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles", hour12: false, hour: "2-digit", minute: "2-digit" }).split(":");
+    var r = new Date(Date.now() + (1440 - ((+q[0] % 24) * 60 + +q[1])) * 6e4), h = Math.round((r.getHours() * 60 + r.getMinutes()) / 60) % 24;
+    return (r.toDateString() === new Date().toDateString() ? "dziś" : "jutro") + " ok. " + h + ":00";
+  } catch (e) { return "ok. 9:00"; }
+}
+/* co oznacza błąd i co zrobić */
+function dgWhy(p, R) {
+  var s = R.st, er = R.j && R.j.error, m = String((er && (er.message || er.type || (typeof er === "string" ? er : ""))) || (R.j && R.j.message) || R.tx || "").replace(/\s+/g, " ").slice(0, 400), M = m + " " + JSON.stringify(er || {}), pn = PROV[p].n;
+  if (s === 0) return { lvl: "net", t: R.tx || "Brak połączenia.", h: navigator.onLine === false ? "Telefon jest offline – włącz internet i spróbuj ponownie." : "Połączenie z " + pn + " się nie udało. Sprawdź internet; jeśli działa, połączenie może blokować VPN, blokada reklam albo sieć firmowa lub szkolna." };
+  if (/API_KEY_INVALID|API key not valid|API key expired|invalid x-api-key|invalid_api_key|Incorrect API key|authentication_error|Invalid API Key|No auth credentials|User not found/i.test(M) || s === 401) return { lvl: "bad", inv: 1, t: "Klucz jest nieprawidłowy, wygasł albo został usunięty.", h: "Skopiuj klucz jeszcze raz w całości (bez spacji) albo utwórz nowy i podmień go." };
+  if (/location is not supported|unsupported_country|not available in your (country|region)/i.test(M)) return { lvl: "bad", t: pn + " nie działa w Twoim regionie lub przez Twoją sieć.", h: "Wyłącz VPN albo użyj innego dostawcy." };
+  if (/SERVICE_DISABLED|has not been used in project|API has not been used|is disabled/i.test(M)) return { lvl: "bad", t: "W projekcie Google wyłączone jest „Generative Language API”.", h: "Najprościej utwórz nowy klucz w Google AI Studio – tam usługa włącza się sama." };
+  if (s === 403 && /API_KEY_SERVICE_BLOCKED|REFERRER|referer|referrer|blocked/i.test(M)) return { lvl: "bad", t: "Klucz ma ograniczenia (np. tylko dla wybranych stron lub usług).", h: "Utwórz nowy klucz bez ograniczeń w Google AI Studio albo w Google Cloud → Dane logowania dodaj stronę motywacjakornaszka-svg.github.io." };
+  if (s === 402 || /credit balance is too low|insufficient_quota|insufficient credits|purchase credits|requires more credits/i.test(M)) return { lvl: "bad", t: "Brak środków na koncie " + pn + ".", h: "Doładuj konto u dostawcy albo korzystaj z darmowego klucza Gemini." };
+  if (s === 403) return { lvl: "bad", t: "Brak uprawnień: " + m.slice(0, 140), h: "Utwórz nowy klucz u dostawcy i podmień go." };
+  if (s === 429) {
+    var rd = dgRetry(R.j), day = /PerDay|per day|daily|per_day/i.test(M), fr = /free_tier|FreeTier|free tier/i.test(M);
+    return { lvl: "warn", lim: 1, t: "Klucz jest dobry, ale wyczerpał się " + (day ? "dzienny" : "chwilowy") + " limit zapytań" + (fr ? " (darmowy plan)" : "") + ".",
+      h: day ? (p === "gemini" ? "Limit odnowi się " + pacificReset() + ". Możesz dodać drugi klucz Gemini (z innego konta Google) jako zapasowy." : "Limit odnowi się jutro. Możesz dodać zapasowy klucz innego dostawcy.") : "Spróbuj ponownie" + (rd ? " za " + rd : " za minutę") + ". Gdy to się powtarza, dodaj zapasowy klucz." };
+  }
+  if (s === 404) return { lvl: "warn", t: "Model niedostępny (wycofany albo zmieniony).", h: "To nie problem klucza – aplikacja wybierze inny model." };
+  if (s >= 500 || /overloaded|UNAVAILABLE/i.test(M)) return { lvl: "warn", t: "Serwery " + pn + " są przeciążone (" + s + ").", h: "To nie wina klucza. Spróbuj za kilka minut." };
+  if (s === 400) return { lvl: "bad", t: "Zapytanie odrzucone: " + m.slice(0, 140), h: "Jeśli to się powtarza, skopiuj raport i wyślij go do pomocy." };
+  return { lvl: "bad", t: "Błąd " + s + ": " + m.slice(0, 140), h: "" };
+}
+function dgFormat(x) {
+  var raw = String(x.k), k = raw.trim(), g = detectProv(cleanKey(raw));
+  if (/\s/.test(k) || /["']/.test(raw)) return ["warn", "W kluczu są spacje lub cudzysłowy – mogą przeszkadzać. Wklej go jeszcze raz."];
+  if (k.length < 20) return ["bad", "Klucz jest za krótki – pewnie skopiował się tylko kawałek."];
+  if (!g) return ["warn", "Nie rozpoznaję formatu. Klucz " + PROV[x.p].n + " zwykle zaczyna się od " + PFX[x.p] + "."];
+  if (g !== x.p) return ["bad", "To wygląda na klucz " + PROV[g].n + ", a jest zapisany jako " + PROV[x.p].n + "."];
+  return ["ok", PROV[x.p].n + ", " + k.length + " znaków."];
+}
+/* po udanym teście: zapamiętaj działający model i odblokuj klucz w Jedzeniu; przy złym kluczu oznacz go w Jedzeniu */
+function dgOk(x, model, ids) {
+  if (x.w.indexOf("Mentor") >= 0 && K[x.p]) { var c = K[x.p]; c.ok = model; if (ids && ids.length) { c.list = rankModels(x.p, ids); c.tl = rankTrans(x.p, ids); c.lt = Date.now(); } svK(); }
+  dgTz(x, { state: "ok", until: 0, note: "", lastOk: Date.now() });
+}
+function dgUnblock(x) {
+  if (!x.tz) return; var c = tzAiCfg(), l = c.keys && c.keys[x.tz.p], t = l && l.filter(function (z) { return z.id === x.tz.id; })[0];
+  if (t && t.state === "invalid") dgTz(x, { state: "", note: "" });
+}
+function dgTz(x, patch) {
+  if (!x.tz) return; var c = tzAiCfg(), l = c.keys && c.keys[x.tz.p]; if (!l) return;
+  var t = l.filter(function (z) { return z.id === x.tz.id; })[0]; if (!t) return;
+  for (var a in patch) t[a] = patch[a];
+  try { localStorage.setItem("talerz:ai-config", JSON.stringify(c)); } catch (e) {}
+  if (TZF && TZF.contentWindow) TZF.contentWindow.postMessage({ tz: "reload" }, location.origin);
+}
+function dgTest(x) {
+  var r = DG.r[x.id] = { st: [], v: "run" }; dgDraw();
+  function step(ic, t, d) { r.st.push([ic, t, d || ""]); dgDraw(); }
+  function fin(v, h) { if (r.v === "run" || v === "bad") r.v = v; if (h && !r.h) r.h = h; }
+  var f = dgFormat(x); step(f[0], "Format", f[1]);
+  if (f[0] === "bad") fin("bad", "Skopiuj klucz jeszcze raz w całości ze strony dostawcy i podmień go.");
+  if (navigator.onLine === false) { step("bad", "Internet", "Telefon jest offline."); fin("net", "Włącz internet i spróbuj ponownie."); r.done = Date.now(); dgDraw(); return Promise.resolve(); }
+  var ids = [];
+  return dgReq(x.p, x.k, "models").then(function (R) {
+    if (R.ok) { ids = dgIds(x.p, R.j); step("ok", "Połączenie i klucz", "Klucz przyjęty · dostępnych modeli: " + ids.length + " · " + R.ms + " ms"); dgUnblock(x); return true; }
+    var w = dgWhy(x.p, R); step(w.lvl === "warn" ? "warn" : "bad", "Połączenie i klucz", w.t + " (kod " + (R.st || "–") + ", " + R.ms + " ms)");
+    fin(w.lvl === "warn" ? "warn" : w.lvl === "net" ? "net" : "bad", w.h); if (w.inv) dgTz(x, { state: "invalid", until: 0 });
+    return w.lvl === "warn";
+  }).then(function (go) {
+    if (!go) return;
+    var ch = uniq((ids.length ? rankModels(x.p, ids) : []).concat(DEFM[x.p] || [])).slice(0, 4), errs = [];
+    function tryM(i) {
+      if (i >= ch.length) {
+        var last = errs[errs.length - 1] || { lvl: "bad", t: "brak odpowiedzi", h: "" }, lim = errs.length && errs.every(function (e) { return e.lim; });
+        var grp = {}, ord = []; errs.forEach(function (e) { if (!grp[e.t]) { grp[e.t] = []; ord.push(e.t); } grp[e.t].push(e.m); });
+        step(last.lvl === "warn" ? "warn" : "bad", "Odpowiedź modelu", ord.map(function (t) { return t + " (" + grp[t].join(", ") + ")"; }).join(" · "));
+        fin(last.lvl === "warn" ? "warn" : last.lvl === "net" ? "net" : "bad", lim ? last.h : (last.h || "Spróbuj ponownie za chwilę."));
+        if (last.inv) dgTz(x, { state: "invalid", until: 0 });
+        return;
+      }
+      return dgReq(x.p, x.k, "gen", ch[i]).then(function (R) {
+        var t = R.ok ? dgText(x.p, R.j) : "";
+        if (R.ok && t) {
+          step("ok", "Odpowiedź modelu", (errs.length ? errs.map(function (e) { return e.m + " ✗ (" + (e.st === 429 ? "limit" : e.st === 404 ? "niedostępny" : e.st >= 500 ? "przeciążony" : e.st ? "błąd " + e.st : "brak odpowiedzi") + ")"; }).join(", ") + " → " : "") + ch[i] + " · " + (R.ms / 1000).toFixed(1).replace(".", ",") + " s · „" + t.replace(/\s+/g, " ").slice(0, 70) + "”");
+          r.m = ch[i]; r.ms = R.ms; fin("ok"); dgOk(x, ch[i], ids); return;
+        }
+        var w = R.ok ? { lvl: "warn", t: "pusta odpowiedź", h: "" } : dgWhy(x.p, R); w.m = ch[i]; w.st = R.st; errs.push(w);
+        if (w.inv || (w.lvl === "bad" && [401, 402, 403].indexOf(R.st) >= 0) || w.lvl === "net") return tryM(ch.length);
+        return tryM(i + 1);
+      });
+    }
+    return tryM(0);
+  }).then(function () {
+    var c = PROV[x.p];
+    step(c.vision ? "ok" : "info", "Zdjęcia", c.vision ? "obsługuje (zdjęcia posiłków i z pamiętnika)" : "nie obsługuje – do zdjęć potrzebny Gemini, Claude, OpenAI lub OpenRouter");
+    if (x.w.indexOf("Mentor") >= 0) step(c.audio ? "ok" : "info", "Nagrania głosowe", c.audio ? "potrafi przepisać na tekst" : "nie przepisuje – do tego Gemini, Groq lub OpenAI");
+    if (x.w.indexOf("Mentor") < 0) step("info", "Gdzie działa", "Ten klucz jest tylko w Jedzeniu" + (x.p === "gemini" || x.p === "claude" ? " – Mentor przejmie go sam, jeśli nie masz innego klucza " + c.n + "." : "."));
+    if (r.v === "run") r.v = "ok"; r.done = Date.now();
+    logAi({ p: x.p, m: r.m || "", ok: r.v === "ok" ? 1 : 0, ms: r.ms || 0, msg: "test: " + DGV[r.v][1].toLowerCase() + (r.h ? " – " + r.h.slice(0, 90) : ""), src: "Test" });
+    dgDraw();
+  });
+}
+function dgAll() {
+  if (DG.busy) return; var it = dgItems(); if (!it.length) return; DG.busy = 1; dgDraw();
+  var i = 0; (function next() { if (i >= it.length) { DG.busy = 0; dgDraw(); return; } dgTest(it[i++]).then(next, next); })();
+}
+function dgDraw() { if (tab === "diag" && !$("sheet").innerHTML) { var y = window.scrollY; render(); window.scrollTo(0, y); } }
+function dgLog() {
+  var a = [], b = [];
+  try { a = JSON.parse(localStorage.getItem(AILOGK) || "[]"); } catch (e) {}
+  try { b = JSON.parse(localStorage.getItem("talerz:ai-log") || "[]").map(function (x) { return { at: x.at, p: x.prov, m: x.model, ok: x.ok ? 1 : 0, ms: x.ms, msg: x.msg, src: "Jedzenie" + (x.img ? " 📷" : "") }; }); } catch (e) {}
+  return a.concat(b).filter(function (x) { return x && x.at; }).sort(function (x, y) { return y.at - x.at; }).slice(0, 40);
+}
+function dgReport() {
+  var L = ["Raport diagnostyczny – Nawyki i Talerz " + VER, new Date().toLocaleString("pl-PL"), "Przeglądarka: " + navigator.userAgent, "Internet: " + (navigator.onLine ? "jest" : "brak"),
+    "Mentor używa: " + (keyed().map(function (p) { return PROV[p].n; }).join(" → ") || "brak klucza") + (LASTM ? " · ostatnio: " + LASTM : ""), ""];
+  dgItems().forEach(function (x) {
+    var r = DG.r[x.id]; L.push(PROV[x.p].n + " " + maskK(x.k) + " [" + x.w.join(", ") + "]: " + (r ? DGV[r.v][1] : "nie testowano"));
+    if (r) r.st.forEach(function (z) { L.push("   " + DGI[z[0]] + " " + z[1] + ": " + z[2]); });
+    if (r && r.h) L.push("   → " + r.h);
+  });
+  L.push("", "Ostatnie zapytania AI:");
+  dgLog().slice(0, 20).forEach(function (e) { L.push("   " + new Date(e.at).toLocaleString("pl-PL") + " " + (e.ok ? "OK" : "BŁĄD") + " " + (e.src || "") + " " + (e.p || "") + " " + (e.m || "") + (e.ms ? " " + Math.round(e.ms) + " ms" : "") + (e.st ? " kod " + e.st : "") + (e.msg ? " – " + e.msg : "")); });
+  return L.join("\n");
+}
+function dgShowReport(t) { openSheet("📋 Raport diagnostyczny", '<div class="note" style="margin-bottom:6px">Zaznacz i skopiuj tekst. Pełnych kluczy w nim nie ma.</div><textarea readonly style="min-height:300px;font-size:12px" data-nomic="1">' + esc(t) + "</textarea>"); }
+function diag() {
+  var it = dgItems(), ks = keyed(), h = '<div class="card"><div class="note">Sprawdzam każdy klucz krok po kroku: format, połączenie, czy dostawca go przyjmuje i czy model naprawdę odpowiada. Klucze trafiają tylko do swojego dostawcy AI.</div>';
+  h += '<div class="btns" style="margin-top:10px"><button class="pri" data-a="dgall"' + (DG.busy || !it.length ? " disabled" : "") + ">" + (DG.busy ? "⏳ Sprawdzam…" : "▶️ Testuj wszystkie") + '</button><button class="sec" data-a="dgcopy">📋 Kopiuj raport</button></div>';
+  h += '<div class="dgs"><span>' + (navigator.onLine === false ? "📵 Internet: brak" : "📶 Internet: jest") + "</span><span>🧭 Mentor używa: " + (ks.length ? ks.map(function (p) { return PROV[p].n; }).join(" → ") : "—") + "</span>" + (LASTM ? "<span>✅ Ostatnio odpowiedział: " + esc(LASTM) + "</span>" : "") + "</div></div>";
+  if (!it.length) h += '<div class="card wn">🔑 Nie ma jeszcze żadnego klucza. <button class="lnk" data-a="tab" data-id="ust">Dodaj klucz w Ustawieniach ›</button></div>';
+  it.forEach(function (x) {
+    var r = DG.r[x.id], v = r ? DGV[r.v] : null;
+    h += '<div class="card dgk"><div class="dgh"><div><b>' + esc(PROV[x.p].n) + "</b>" + (x.lab ? " „" + esc(x.lab) + "”" : "") + '<div class="note"><span class="mono">' + esc(maskK(x.k)) + "</span> · " + x.w.map(function (w) { return '<span class="badge">' + w + "</span>"; }).join(" ") + "</div></div>" +
+      '<button class="sec sm" data-a="dgone" data-id="' + x.id + '"' + (DG.busy ? " disabled" : "") + ">Testuj</button></div>";
+    if (r) {
+      h += '<div class="dgv ' + r.v + '">' + v[0] + " " + v[1] + (r.done ? " <small>" + hm(r.done) + "</small>" : "") + "</div>";
+      h += '<div class="dgst">' + r.st.map(function (z) { return "<div><i>" + DGI[z[0]] + "</i><span><b>" + esc(z[1]) + ":</b> " + esc(z[2]) + "</span></div>"; }).join("") + (r.v === "run" ? '<div><i><span class="dots"><i></i><i></i><i></i></span></i><span class="note">sprawdzam…</span></div>' : "") + "</div>";
+      if (r.h && r.v !== "ok" && r.v !== "run") h += '<div class="dgfix">💡 <b>Co zrobić:</b> ' + esc(r.h) + (r.v === "bad" ? ' <a href="' + PROV[x.p].key + '" target="_blank" rel="noopener">Klucze ' + esc(PROV[x.p].n) + " ↗</a>" : "") + "</div>";
+    }
+    h += "</div>";
+  });
+  var lg = dgLog();
+  h += '<details class="card"><summary><b>📋 Ostatnie zapytania AI</b> <span class="note">(' + lg.length + ")</span></summary>" +
+    (lg.length ? lg.map(function (e) { return '<div class="dgl"><span>' + new Date(e.at).toLocaleString("pl-PL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) + "</span><span>" + (e.ok ? "✅" : "❌") + " " + esc(e.src || "") + (e.p ? " · " + esc(PROV[e.p] ? PROV[e.p].n : e.p) : "") + (e.m ? " · " + esc(e.m) : "") + (e.ms ? " · " + (e.ms / 1000).toFixed(1).replace(".", ",") + " s" : "") + (e.st ? " · kod " + e.st : "") + (e.msg && !e.ok ? "<small>" + esc(e.msg) + "</small>" : "") + "</span></div>"; }).join("") : '<div class="note" style="margin-top:6px">Brak wpisów.</div>') +
+    (lg.length ? '<button class="lnk" data-a="dglogclr" style="margin-top:8px">Wyczyść dziennik Mentora</button>' : "") + "</details>";
+  h += '<div class="note">Klucze mentora dodajesz w Ustawieniach, a klucze do zdjęć posiłków w Jedzenie → Profil → AI. Klucze Gemini i Claude działają w obu częściach.</div>';
+  return h;
+}
+
 /* ---------- MENTOR ---------- */
 /* wiadomości → wymiany (pytanie + odpowiedź), z numerem wiadomości do przycisków 🔊 i 📋 */
 function exch(list) {
@@ -1100,7 +1311,7 @@ function exHtml(x, state) {
   if (x.u) h += '<div class="bub u">' + (x.u.v ? "🎤 " : "") + esc(x.u.t) + (x.u.im ? '<div class="thumbs">' + x.u.im.map(function (id) { return '<img data-mid="' + id + '" data-a="full" alt="zdjęcie">'; }).join("") + "</div>" : "") + "<small>" + hm(x.u.ts) + "</small></div>";
   x.a.forEach(function (m) { h += '<div class="bub m">' + md(m.t) + '<div class="bt"><small>' + hm(m.ts) + '</small><span style="flex:1"></span>' + (ttsOK() ? '<button class="ib" data-a="say" data-i="' + m.i + '" aria-label="Przeczytaj na głos">' + (TTS.on && TTS.i === m.i ? "⏹️" : "🔊") + "</button>" : "") + '<button class="ib" data-a="copym" data-i="' + m.i + '" aria-label="Kopiuj">📋</button></div></div>'; });
   if (!x.a.length && state === "wait") h += '<div class="bub m think"><span class="dots"><i></i><i></i><i></i></span> ' + esc(busy || "Mentor myśli…") + "</div>";
-  if (!x.a.length && state === "err") h += '<div class="bub m err">⚠️ Brak odpowiedzi. <button class="sec sm" data-a="chatretry">Ponów</button></div>';
+  if (!x.a.length && state === "err") h += '<div class="bub m err">⚠️ Brak odpowiedzi. <button class="sec sm" data-a="chatretry">Ponów</button> <button class="sec sm" data-a="tab" data-id="diag">🔧 Sprawdź klucze</button></div>';
   return h + "</div>";
 }
 function ment() {
@@ -1150,9 +1361,9 @@ function ment() {
 /* ---------- WIĘCEJ ---------- */
 function wiecej() {
   var act = S.pj.filter(function (p) { return p.status === "doing"; }).length, ig = S.g.filter(function (g) { return !g.done; }).length;
-  var t = [["proj", "💡", "Pomysły i projekty", S.pj.length + " · w toku " + act], ["cele", "🎯", "Cele", ig + " aktywnych"], ["roz", "🤸", "Rozruch", "ćwiczenia z minutnikiem"], ["ryt", "⏰", "Rytm dnia", "plan i przypomnienia"], ["fast", "🌙", "Post przerywany", actF() ? "trwa teraz" : "historia i cel"], ["rap", "📊", "Raport", "PDF, CSV, udostępnij"], ["jedz", "🍽️", "Jedzenie – profil", "dane, limit, wygląd"], ["ust", "⚙️", "Ustawienia i AI", hasAI() ? prov().n : "dodaj klucz API"], ["dane", "💾", "Kopie i dane", S.bk ? "kopia " + new Date(S.bk).toLocaleDateString("pl-PL") : "brak kopii"]];
+  var t = [["proj", "💡", "Pomysły i projekty", S.pj.length + " · w toku " + act], ["cele", "🎯", "Cele", ig + " aktywnych"], ["roz", "🤸", "Rozruch", "ćwiczenia z minutnikiem"], ["ryt", "⏰", "Rytm dnia", "plan i przypomnienia"], ["fast", "🌙", "Post przerywany", actF() ? "trwa teraz" : "historia i cel"], ["rap", "📊", "Raport", "PDF, CSV, udostępnij"], ["jedz", "🍽️", "Jedzenie – profil", "dane, limit, wygląd"], ["ust", "⚙️", "Ustawienia i AI", hasAI() ? prov().n : "dodaj klucz API"], ["diag", "🔧", "Diagnostyka AI", dgSum()], ["dane", "💾", "Kopie i dane", S.bk ? "kopia " + new Date(S.bk).toLocaleDateString("pl-PL") : "brak kopii"]];
   t = t.filter(function (x) { return x[0] === "proj" ? on("proj") : x[0] === "ryt" ? on("ryt") : x[0] === "fast" ? on("fast") : true; });
-  return '<div class="g2">' + t.map(function (x) { return '<div class="tile" data-a="' + (x[0] === "jedz" ? 'tzgo" data-id="profil' : 'tab" data-id="' + x[0]) + '"><i>' + x[1] + "</i>" + x[2] + "<small>" + esc(x[3]) + "</small></div>"; }).join("") + '</div><div class="note" style="text-align:center">Nawyki i Talerz ' + VER + "</div>";
+  return '<div class="g2">' + t.map(function (x) { return '<div class="tile" data-a="' + (x[0] === "jedz" ? 'tzgo" data-id="profil' : 'tab" data-id="' + x[0]) + '"><i>' + x[1] + "</i>" + x[2] + "<small>" + esc(x[3]) + "</small></div>"; }).join("") + '</div><div class="note" style="text-align:center">Nawyki i Talerz ' + VER + ' · <button class="lnk" data-a="updchk" style="font-size:inherit">🔄 Sprawdź aktualizację</button></div>';
 }
 
 /* ---------- ROZRUCH (bez zmian funkcjonalnych) ---------- */
@@ -1298,6 +1509,7 @@ function ust() {
     h += '<div class="card">' + ks.map(function (p, i) { var c = cfg(p); return '<div class="row"><div class="nm"><b>✅ ' + PROV[p].n + "</b>" + (i === 0 ? ' <span class="badge">główny</span>' : ' <span class="badge">zapasowy</span>') + "<small>" + PROV[p].note.split(".")[0] + "." + (c.ok ? " Ostatnio działał model: " + esc(c.ok) + "." : "") + '</small></div><button class="sec sm dng" data-a="kdel" data-id="' + p + '">Usuń</button></div>'; }).join("") +
       '<div class="note" style="margin-top:6px">Model wybiera się sam. Gdy jeden jest przeciążony, aplikacja od razu używa następnego' + (ks.length > 1 ? ", a w razie potrzeby drugiego dostawcy" : "") + ". Przepisywanie nagrań: " + (hasVoice() ? "✅ działa" : "potrzebny klucz Gemini, Groq lub OpenAI") + ".</div></div>";
     h += '<details class="card"><summary>➕ Dodaj zapasowy klucz (opcjonalnie)</summary><div style="margin-top:8px">' + keyBox(false).replace('<div class="card">', "<div>") + "</div></details>";
+    h += '<button class="sec" data-a="tab" data-id="diag" style="width:100%;margin-bottom:12px">🔧 Test i diagnostyka kluczy</button>';
     h += keyHelp(false);
   } else { h += keyBox(true) + keyHelp(true); }
   h += '<h3>Charakter mentora</h3><div class="card">' + Object.keys(TONES).map(function (t) { return '<label class="sw"><input type="radio" name="tone" data-f="tone" value="' + t + '"' + (S.set.tone === t ? " checked" : "") + "> " + TONES[t][0] + "</label>"; }).join("");
@@ -1360,6 +1572,7 @@ function dane() {
   var h = '<div class="card"><b>💾 Kopia zapasowa</b><div class="note" style="margin:4px 0 10px">Kopia obejmuje nawyki, pamiętnik, cele, projekty oraz dane Jedzenia. ' + (S.bk ? "Ostatnia kopia: " + new Date(S.bk).toLocaleString("pl-PL") : "Nie masz jeszcze kopii w tej wersji.") + ' Zapisz plik w bezpiecznym miejscu (Dysk Google, e-mail do siebie).</div><div class="btns"><button class="pri" data-a="jx">💾 Kopia (bez zdjęć)</button><button class="sec" data-a="jxf">📦 Pełna kopia ze zdjęciami i nagraniami</button></div></div>';
   h += '<div class="card"><b>📥 Wczytaj kopię</b><div class="note" style="margin:4px 0 10px">Działa z kopiami Nawyków (wersje 2, 3 i 4). Kopia z wersji 4 zawiera też dane Jedzenia (profil, posiłki, płyny, waga). Kopię samego Talerza wczytasz w Jedzenie → Profil. Wczytanie zastępuje obecne dane – przed tym aplikacja sama zapisuje kopię bieżącego stanu.</div><button class="sec" data-a="imp">📥 Wybierz plik kopii</button>' + (localStorage.getItem(KEY + "-przed-importem") ? '<button class="lnk" data-a="undoimp" style="margin-left:8px">Cofnij ostatni import</button>' : "") + "</div>";
   h += '<div class="card"><b>📦 Pamięć</b><div class="note" id="stor">Sprawdzam…</div></div>';
+  h += '<div class="card"><b>🔄 Wersja aplikacji: ' + VER + '</b><div class="note" style="margin:4px 0 10px">Nowa wersja wczytuje się sama po otwarciu aplikacji. Gdyby telefon uparcie pokazywał starą, wczytaj ją od nowa – usuwa to tylko zapamiętane pliki programu, Twoje dane zostają.</div><div class="btns"><button class="sec" data-a="updchk">🔄 Sprawdź aktualizację</button><button class="sec" data-a="updforce">🧹 Wczytaj od nowa</button></div></div>';
   h += '<div class="card"><b>⚠️ Strefa ostrożności</b><div class="note" style="margin:4px 0 10px">Usuwa punkty, notatki, pamiętnik, zdjęcia, posty, projekty i rozmowy. Nawyki, ćwiczenia, rytm dnia i hasła zostają.</div><button class="sec dng" data-a="reset">Wyczyść wszystkie postępy</button></div>';
   setTimeout(function () { var e = $("stor"); if (!e) return; var t = "Wpisów pamiętnika: " + S.j.length + " · dni z ocenami: " + Object.keys(S.l).length + " · projektów: " + S.pj.length + ". ";
     if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(function (x) { navigator.storage.persisted ? navigator.storage.persisted().then(function (p) { e.textContent = t + "Zajęte: " + (x.usage / 1048576).toFixed(1) + " MB. " + (p ? "Pamięć trwała włączona ✅ (przeglądarka nie usunie danych sama)." : "Pamięć nie jest oznaczona jako trwała – rób regularnie kopie."); }) : (e.textContent = t); }); else e.textContent = t; }, 50);
@@ -1397,13 +1610,13 @@ function render() {
   if (locked && LK) { $("v").innerHTML = ""; $("tabs").innerHTML = ""; tzShow(false); closeSheet(true); showLock(); return; }
   document.documentElement.setAttribute("data-theme", S.set.theme === "auto" ? "" : S.set.theme);
   tzShow(tab === "jedz");
-  document.body.classList.toggle("mton", tab === "ment");
+  document.body.classList.toggle("mton", tab === "ment" || tab === "diag");
   var n = new Date(), hr = n.getHours(), sub = SUBS[tab];
   $("gr").textContent = sub ? sub : tab === "pam" ? "📔 Pamiętnik" : tab === "post" ? "📈 Postęp" : tab === "ment" ? "🧭 Mentor" : tab === "jedz" ? "🍽️ Jedzenie" : tab === "wiecej" ? "Więcej" : hr < 12 ? "Dzień dobry!" : hr < 18 ? "Miłego dnia!" : "Dobry wieczór!";
   $("dt").innerHTML = sub ? '<button class="lnk" data-a="tab" data-id="wiecej" style="font-size:13px;padding:0">‹ Więcej</button>' : n.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }) + " · 🔥 " + streak() + " · 📔 " + dStreak();
   var nt = sub ? "wiecej" : tab;
   $("tabs").innerHTML = TABS.map(function (t) { return '<button class="' + (nt === t[0] ? "on" : "") + '" data-a="tab" data-id="' + t[0] + '"><i>' + t[1] + "</i>" + t[2] + "</button>"; }).join("");
-  var V = { jedz: function () { return ""; }, dzis: dzis, pam: pam, post: post, ment: ment, wiecej: wiecej, proj: proj, cele: cele, roz: roz, ryt: ryt, fast: fast, rap: rap, ust: ust, dane: dane };
+  var V = { jedz: function () { return ""; }, dzis: dzis, pam: pam, post: post, ment: ment, wiecej: wiecej, proj: proj, cele: cele, roz: roz, ryt: ryt, fast: fast, rap: rap, ust: ust, dane: dane, diag: diag };
   $("v").innerHTML = (V[tab] || dzis)();
   var bb = $("back"); if (bb) bb.hidden = !(navD > 0);
   addMics($("v"));
@@ -1466,13 +1679,15 @@ window.addEventListener("message", function (ev) {
 window.addEventListener("storage", function (ev) { if (!ev.key || ev.key.indexOf("talerz:") === 0) { if (ev.key === "talerz:ai-config") syncKeys(); else tzChanged(); } else if (ev.key === KEY && ev.newValue) { /* inna karta zmieniła dane nawyków */ } });
 
 /* ---------- wspólne klucze AI: Nawyki ⇄ Jedzenie (Gemini i Claude) ---------- */
+/* „odcisk” klucza: krótki skrót do rozpoznania usuniętego klucza – sam klucz nie jest nigdzie zapisywany w danych ani w kopii */
+function kfp(k) { k = String(k || "").trim(); if (/^fp[0-9a-f]{8}$/.test(k)) return k; var h = 2166136261; for (var i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return "fp" + ("0000000" + h.toString(16)).slice(-8); }
 function syncKeys() {
   var c; try { c = JSON.parse(localStorage.getItem("talerz:ai-config") || "{}"); } catch (e) { c = {}; }
-  c.keys = c.keys || {}; var chT = false, chN = false, dead = S.set.kdead || [];
+  c.keys = c.keys || {}; var chT = false, chN = false, dead = (S.set.kdead || []).map(kfp);
   ["gemini", "claude"].forEach(function (p) {
     var arr = c.keys[p] = c.keys[p] || [], mine = cfg(p).k;
     if (mine && !arr.some(function (x) { return x.key === mine; })) { arr.push({ id: uid("n").slice(0, 9), key: mine, label: "z Nawyków" }); chT = true; }
-    if (!mine) { var cand = arr.filter(function (x) { return x.state !== "invalid" && dead.indexOf(x.key) < 0; })[0]; if (cand) { K[p] = { k: cand.key }; chN = true; } }
+    if (!mine) { var cand = arr.filter(function (x) { return x.state !== "invalid" && dead.indexOf(kfp(x.key)) < 0; })[0]; if (cand) { K[p] = { k: cand.key }; chN = true; } }
   });
   if (chT) try { localStorage.setItem("talerz:ai-config", JSON.stringify(c)); } catch (e) {}
   if (chN) { svK(); if (!S.set.lastP || !cfg(S.set.lastP).k) { S.set.lastP = keyed()[0] || ""; sv(); } }
@@ -1536,6 +1751,13 @@ document.addEventListener("click", function (ev) {
     case "rev": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doReview(); break;
     case "chats": { var ci = $("chatin"); if (ci && ci.value.trim()) { var v2 = ci.value, vv = CHATV; stopDict(); if (S.set.tts.mode === "always" || (S.set.tts.mode === "voice" && vv)) ttsUnlock(); chatSend(v2, { v: vv }); } break; }
     case "chatretry": chatAsk(); break;
+    case "updnow": location.reload(); break;
+    case "updchk": updCheckNow(); break;
+    case "updforce": updForce(); break;
+    case "dgone": { var dx = dgItems().filter(function (z) { return z.id === id; })[0]; if (dx && !DG.busy) { DG.busy = 1; dgDraw(); dgTest(dx).then(function () { DG.busy = 0; dgDraw(); }, function () { DG.busy = 0; dgDraw(); }); } break; }
+    case "dgall": dgAll(); break;
+    case "dgcopy": { var rp = dgReport(); try { navigator.clipboard.writeText(rp).then(function () { toast("📋 Raport skopiowany – możesz go wkleić w wiadomości"); }, function () { dgShowReport(rp); }); } catch (e) { dgShowReport(rp); } break; }
+    case "dglogclr": if (confirm("Wyczyścić dziennik zapytań Mentora?")) { try { localStorage.removeItem(AILOGK); } catch (e) {} render(); } break;
     case "say": { var si = +t.getAttribute("data-i"), sm = S.mt[si]; if (TTS.on && TTS.i === si) ttsStop(); else if (sm) { ttsUnlock(); speak(sm.t, si); } break; }
     case "copym": { var cm = S.mt[+t.getAttribute("data-i")]; if (cm) { try { navigator.clipboard.writeText(cm.t).then(function () { toast("📋 Skopiowano"); }, function () { toast("Nie udało się skopiować."); }); } catch (e) { toast("Nie udało się skopiować."); } } break; }
     case "ttsstop": ttsStop(); break;
@@ -1605,7 +1827,7 @@ document.addEventListener("click", function (ev) {
     /* ustawienia AI */
     case "ksave": { var nk = $("newkey"); if (nk && nk.value.trim()) addKey(nk.value); else toast("Najpierw wklej klucz w pole."); break; }
     case "kpaste": if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(function (x) { if (!(x || "").trim()) { toast("Schowek jest pusty – skopiuj najpierw klucz."); return; } addKey(x); }).catch(function () { toast("Brak dostępu do schowka – przytrzymaj pole, wybierz Wklej i dotknij Zapisz.", 5000); var nk = $("newkey"); if (nk) nk.focus(); }); else { toast("Przytrzymaj pole, wybierz Wklej i dotknij Zapisz."); } break;
-    case "kdel": if (confirm("Usunąć klucz " + PROV[id].n + " z tego telefonu?" + (id === "gemini" || id === "claude" ? "\n(Klucze używane w Jedzeniu zmienisz w Jedzenie → Profil → AI.)" : ""))) { S.set.kdead = (S.set.kdead || []).concat([cfg(id).k]).slice(-10); delete K[id]; svK(); if (S.set.lastP === id) { S.set.lastP = ""; sv(); } render(); } break;
+    case "kdel": if (confirm("Usunąć klucz " + PROV[id].n + " z tego telefonu?" + (id === "gemini" || id === "claude" ? "\n(Klucze używane w Jedzeniu zmienisz w Jedzenie → Profil → AI.)" : ""))) { S.set.kdead = (S.set.kdead || []).concat([kfp(cfg(id).k)]).slice(-10); delete K[id]; svK(); if (S.set.lastP === id) S.set.lastP = ""; sv(); render(); } break;
     case "lockset": lockSheet(); break;
     case "locksave": { var p1 = $("lp1").value, p2 = $("lp2").value, hint = $("lph").value.trim();
       if (p1.length < 4) { toast("Hasło musi mieć co najmniej 4 znaki."); break; } if (p1 !== p2) { toast("Hasła się różnią."); break; }
@@ -1664,12 +1886,72 @@ document.addEventListener("toggle", function (ev) { var d = ev.target, c = d.get
 document.addEventListener("keydown", function (ev) { if (ev.key === "Enter" && !ev.shiftKey) { if (ev.target.id === "lpw") { ev.preventDefault(); tryUnlock(); return; } if (ev.target.id === "newkey") { ev.preventDefault(); document.querySelector('[data-a="ksave"]').click(); return; } if (ev.target.id === "pjns") { ev.preventDefault(); document.querySelector('[data-a="psa"]').click(); } else if (ev.target.id === "fcn") { ev.preventDefault(); document.querySelector('[data-a="fcadd"]').click(); } } if (ev.key === "Escape" && $("sheet").innerHTML) closeSheet(); });
 
 document.addEventListener("visibilitychange", function () { if (document.hidden) hiddenAt = Date.now(); else if (LK && !locked && hiddenAt && Date.now() - hiddenAt > 60000) { locked = true; render(); } });
-tzLinksInit(); v41Init(); v42Init(); syncKeys();
+tzLinksInit(); v41Init(); v42Init();
+if (S.set.lastVer && S.set.lastVer !== VER) setTimeout(function () { toast("✨ Zaktualizowano do wersji " + VER, 4000); }, 600);
+if (S.set.lastVer !== VER) { S.set.lastVer = VER; sv(); }
+if (/[?&]odswiez=/.test(location.search)) { try { history.replaceState(history.state, "", location.pathname); } catch (e) {} }
+if (S.set.kdead && S.set.kdead.some(function (x) { return !/^fp[0-9a-f]{8}$/.test(x); })) { S.set.kdead = S.set.kdead.map(kfp); sv(); }
+syncKeys();
 try { if (localStorage.getItem("talerz:theme") !== (S.set.theme || "auto")) localStorage.setItem("talerz:theme", S.set.theme || "auto"); } catch (e) {}
 (function () { var a = new URLSearchParams(location.search).get("akcja"); if (a === "posilek" || a === "woda") { try { history.replaceState({ nawTab: tab, d: 0 }, "", location.pathname); } catch (e) {} tzPend = a; tab = "jedz"; } })();
 document.addEventListener("visibilitychange", function () { if (!document.hidden) { wgInit(); tzChanged(); } });
 setInterval(tick, 1000); setInterval(chk, 20000); render(); chk();
 setTimeout(function () { keyed().forEach(function (p) { ensureModels(p); }); }, 3000);
-try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (r) { r.update().catch(function () {}); }).catch(function () {}); } catch (e) {}
+/* ---------- AKTUALIZACJE: nowa wersja wczytuje się sama ----------
+   Przy starcie, przy każdym powrocie do aplikacji i co 30 minut sprawdzam, czy na serwerze jest nowy sw.js.
+   Gdy jest – nowy service worker przejmuje stronę, a aplikacja przeładowuje się sama (od razu albo gdy nic nie piszesz). */
+var SWREG = null, hadCtl = false, updPending = false, updChk = 0;
+function updSafe() { return !typing() && !$("sheet").innerHTML && !busy && !REC && !DICT && !(TTS && TTS.on) && !(locked && LK); }
+function applyUpdate() { if (updSafe()) location.reload(); else { updPending = true; updBanner(); } }
+function updBanner(stuck) {
+  var d = $("updbar"); if (!d) { d = document.createElement("div"); d.id = "updbar"; d.className = "noprint"; document.body.appendChild(d); }
+  d.innerHTML = stuck ? '<span>✨ Jest nowa wersja, ale telefon wczytał starą</span><button class="pri sm" data-a="updforce">Wczytaj od nowa</button>' : '<span>✨ Nowa wersja aplikacji jest gotowa</span><button class="pri sm" data-a="updnow">Odśwież</button>';
+}
+/* numer wersji na serwerze: pierwsze bajty app.js (bez pobierania całego pliku) */
+function srvVer() {
+  return fetch("app.js?u=" + Date.now(), { cache: "no-store", headers: { Range: "bytes=0-1023" } }).then(function (r) { if (!r.ok) throw new Error(); return r.text(); })
+    .then(function (t) { var m = /var VER = "([^"]+)"/.exec(t); return m ? m[1] : ""; }).catch(function () { return ""; });
+}
+var UPDK = "nawyki-v3-aktualizacja";
+function checkUpd() {
+  if (Date.now() - updChk < 20000) return; updChk = Date.now();
+  if (SWREG) SWREG.update().catch(function () {});
+  srvVer().then(function (nv) {
+    if (!nv || nv === VER) return;
+    var tr = {}; try { tr = JSON.parse(localStorage.getItem(UPDK) || "{}"); } catch (e) {}
+    if (tr.v === nv && Date.now() - tr.at < 10 * 60000) { updPending = false; updBanner(true); return; } // już próbowałem – nie przeładowuj w kółko
+    try { localStorage.setItem(UPDK, JSON.stringify({ v: nv, at: Date.now() })); } catch (e) {}
+    setTimeout(applyUpdate, SWREG ? 2500 : 0); // chwila na pobranie nowego service workera
+  });
+}
+try {
+  if ("serviceWorker" in navigator) {
+    hadCtl = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (r) { SWREG = r; }).catch(function () {});
+    navigator.serviceWorker.addEventListener("controllerchange", function () { if (!hadCtl) { hadCtl = true; return; } applyUpdate(); });
+    setInterval(checkUpd, 30 * 60000);
+  }
+} catch (e) {}
+setTimeout(checkUpd, 3000);
+document.addEventListener("visibilitychange", function () { if (document.hidden) return; if (updPending && updSafe()) { location.reload(); return; } checkUpd(); });
+/* ręczne sprawdzenie: porównuję wersję z serwera z tą, która działa */
+function updCheckNow() {
+  toast("🔄 Sprawdzam, czy jest nowa wersja…", 2000);
+  fetch("app.js?v=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(); return r.text(); }).then(function (t) {
+    var m = /var VER = "([^"]+)"/.exec(t), nv = m && m[1];
+    if (!nv) throw new Error();
+    if (nv === VER) { toast("✅ Masz najnowszą wersję (" + VER + ").", 3500); return; }
+    toast("⬇️ Wczytuję wersję " + nv + "…", 4000);
+    if (SWREG) { SWREG.update().catch(function () {}); setTimeout(function () { location.reload(); }, 4000); } else location.reload();
+  }).catch(function () { toast("Nie udało się sprawdzić – brak internetu?", 3500); });
+}
+/* awaryjnie: wyczyść pamięć podręczną aplikacji (tylko pliki programu – dane zostają) i wczytaj wszystko od nowa */
+function updForce() {
+  if (!confirm("Wczytać aplikację od nowa?\n\nUsunę tylko zapamiętane pliki programu. Twoje nawyki, pamiętnik, jedzenie i klucze zostają.")) return;
+  var jobs = [];
+  try { if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k.indexOf("nawyki-talerz-") === 0; }).map(function (k) { return caches.delete(k); })); })); } catch (e) {}
+  try { if (SWREG) jobs.push(SWREG.unregister()); } catch (e) {}
+  Promise.all(jobs).catch(function () {}).then(function () { location.replace(location.pathname + "?odswiez=" + Date.now()); });
+}
 window.__nawyki = { S: function () { return S; }, ctx: ctx, tz: tz, lvl: lvl };
 })();
