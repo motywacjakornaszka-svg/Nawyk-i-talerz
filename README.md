@@ -1,4 +1,4 @@
-# Nawyki i Talerz 4.4
+# Nawyki i Talerz 4.5
 
 Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i Talerz (licznik kalorii ze zdjęć, płyny, kroki, waga) w jednej aplikacji.
 
@@ -15,6 +15,19 @@ Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i
 - **Postęp**: karta „Jedzenie – ostatnie 7 dni” (dni w limicie, cel płynów, warzywa, kroki, zmiana wagi).
 - **Wspólne klucze AI** (Gemini i Claude): klucz dodany w jednym miejscu działa w obu częściach.
 - **Kopia zapasowa** (Więcej → Kopie i dane) zawiera także dane Jedzenia.
+
+## Nowości w 4.5: rozciąganie w Rozruchu
+- **🧘 Rozciąganie** to nowy kafelek w Więcej → Rozruch. Zestaw ma 10 ćwiczeń (ok. 9 min) na:
+  - biodra: wykrok w klęku, czwórka na plecach;
+  - kręgosłup: koci grzbiet – krowa, skręt w leżeniu;
+  - tylną taśmę: tył uda z ręcznikiem, swobodny zwis w skłonie;
+  - klatkę i powięź piersiową: otwarcie w drzwiach, leżenie na zwiniętym ręczniku;
+  - ramiona: ramię przed klatką, triceps za głową.
+- **Każde ćwiczenie ma rysunek** z zaznaczonym rozciąganym miejscem i kierunkiem ruchu, opis „jak wykonać” i łatwiejszą wersję (przycisk „Łatwiej”).
+- **Ćwiczenia „na obie strony”** dają w połowie czasu sygnał dźwiękowy i wibrację: „↔️ Zmień stronę”.
+- **📚 Katalog 11 dodatkowych ćwiczeń**, dodawanych jednym dotknięciem: pozycja dziecka, motyl, łydka przy ścianie, przód uda, sfinks, skłon w bok, nawlekanie igły, anioły przy ścianie, głęboki przysiad, szyja, nadgarstki.
+- **W edycji Rozruchu** każde ćwiczenie (także Twoje z fazy siedzącej i stojącej) może dostać rysunek i znacznik „obie strony”. Możesz też wybrać, który nawyk zalicza rozciąganie.
+- Twoje ćwiczenia i ich zmiany (nazwy, opisy, czasy, kolejność, uwagi, rysunki) są w kopii zapasowej i wracają po jej wczytaniu.
 
 ## Nowości w 4.4: aktualizacje same się wczytują
 - Aplikacja sprawdza, czy jest nowa wersja, przy starcie, przy każdym powrocie do niej i co 30 minut. Gdy ją znajdzie, przeładowuje się sama i pokazuje „✨ Zaktualizowano do wersji …”.

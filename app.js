@@ -1,7 +1,7 @@
-/* Nawyki i Talerz 4.4 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
+/* Nawyki i Talerz 4.5 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
 (function () {
 "use strict";
-var VER = "4.4";
+var VER = "4.5";
 var KEY = "nawyki-v3", OLD = "nawyki-v2", KEYS = "nawyki-v3-klucze";
 var CATS = NAW.CATS, LV = NAW.LV, ST = NAW.ST, ET = NAW.ET, PROV = NAW.PROV;
 
@@ -1361,32 +1361,90 @@ function ment() {
 /* ---------- WIĘCEJ ---------- */
 function wiecej() {
   var act = S.pj.filter(function (p) { return p.status === "doing"; }).length, ig = S.g.filter(function (g) { return !g.done; }).length;
-  var t = [["proj", "💡", "Pomysły i projekty", S.pj.length + " · w toku " + act], ["cele", "🎯", "Cele", ig + " aktywnych"], ["roz", "🤸", "Rozruch", "ćwiczenia z minutnikiem"], ["ryt", "⏰", "Rytm dnia", "plan i przypomnienia"], ["fast", "🌙", "Post przerywany", actF() ? "trwa teraz" : "historia i cel"], ["rap", "📊", "Raport", "PDF, CSV, udostępnij"], ["jedz", "🍽️", "Jedzenie – profil", "dane, limit, wygląd"], ["ust", "⚙️", "Ustawienia i AI", hasAI() ? prov().n : "dodaj klucz API"], ["diag", "🔧", "Diagnostyka AI", dgSum()], ["dane", "💾", "Kopie i dane", S.bk ? "kopia " + new Date(S.bk).toLocaleDateString("pl-PL") : "brak kopii"]];
+  var t = [["proj", "💡", "Pomysły i projekty", S.pj.length + " · w toku " + act], ["cele", "🎯", "Cele", ig + " aktywnych"], ["roz", "🤸", "Rozruch", "rozruch i 🧘 rozciąganie"], ["ryt", "⏰", "Rytm dnia", "plan i przypomnienia"], ["fast", "🌙", "Post przerywany", actF() ? "trwa teraz" : "historia i cel"], ["rap", "📊", "Raport", "PDF, CSV, udostępnij"], ["jedz", "🍽️", "Jedzenie – profil", "dane, limit, wygląd"], ["ust", "⚙️", "Ustawienia i AI", hasAI() ? prov().n : "dodaj klucz API"], ["diag", "🔧", "Diagnostyka AI", dgSum()], ["dane", "💾", "Kopie i dane", S.bk ? "kopia " + new Date(S.bk).toLocaleDateString("pl-PL") : "brak kopii"]];
   t = t.filter(function (x) { return x[0] === "proj" ? on("proj") : x[0] === "ryt" ? on("ryt") : x[0] === "fast" ? on("fast") : true; });
   return '<div class="g2">' + t.map(function (x) { return '<div class="tile" data-a="' + (x[0] === "jedz" ? 'tzgo" data-id="profil' : 'tab" data-id="' + x[0]) + '"><i>' + x[1] + "</i>" + x[2] + "<small>" + esc(x[3]) + "</small></div>"; }).join("") + '</div><div class="note" style="text-align:center">Nawyki i Talerz ' + VER + ' · <button class="lnk" data-a="updchk" style="font-size:inherit">🔄 Sprawdź aktualizację</button></div>';
 }
 
-/* ---------- ROZRUCH (bez zmian funkcjonalnych) ---------- */
+/* ---------- ROZRUCH i ROZCIĄGANIE ---------- */
+/* rysunek ćwiczenia: prosta sylwetka z punktów (NAW.ART), miejsce rozciągane i strzałki w kolorze akcentu */
+function artSvg(a, cls) {
+  if (typeof a === "string") a = NAW.ART[a];
+  if (!a) return "";
+  var p = a.p, o = [], tx = "var(--tx)", mu = "var(--mut)", ac = "var(--ac)", fr = a.front ? tx : mu;
+  function ln(x1, y1, x2, y2, c, w, x) { return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round"' + (x || "") + "/>"; }
+  function pl(pts, c, w, x) { return '<polyline points="' + pts.join(" ") + '" fill="none" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"' + (x || "") + "/>"; }
+  var sN = a.s ? [a.s[0], a.s[1]] : [p[2], p[3]], sF = a.s ? [a.s[2], a.s[3]] : [p[2], p[3]];
+  var hN = a.hp ? [a.hp[0], a.hp[1]] : [p[4], p[5]], hF = a.hp ? [a.hp[2], a.hp[3]] : [p[4], p[5]];
+  /* kadr dopasowany do sylwetki (proporcje 200:128) */
+  var X = [], Y = [], i;
+  for (i = 0; i < p.length; i += 2) { X.push(p[i]); Y.push(p[i + 1]); }
+  [a.s, a.hp].concat(a.ft || [], a.ex || [], a.ga || [], a.ar || []).forEach(function (q) { if (q) for (var j = 0; j + 1 < q.length; j += 2) { X.push(q[j]); Y.push(q[j + 1]); } });
+  (a.hl || []).forEach(function (h) { X.push(h[0] - h[2], h[0] + h[2]); Y.push(h[1] - h[2], h[1] + h[2]); });
+  (a.pr || []).forEach(function (q) { if (q[0] === "door" || q[0] === "wall" || q[0] === "pole") { X.push(q[1] - 4, q[1] + 9); Y.push(q[2] || 10); } if (q[0] === "roll") { X.push(q[1], q[3]); } if (q[0] === "strap") { X.push(q[1], q[3]); Y.push(q[2], q[4]); } });
+  var x0 = Math.min.apply(0, X) - 12, x1 = Math.max.apply(0, X) + 12, y0 = Math.min.apply(0, Y) - 12, y1 = a.top ? Math.max.apply(0, Y) + 12 : 125;
+  if (x1 - x0 < 150) { var cx = (x0 + x1) / 2; x0 = cx - 75; x1 = cx + 75; }
+  var w = x1 - x0, h = y1 - y0, R = 200 / 128;
+  if (w / h < R) { var nw = h * R; x0 -= (nw - w) / 2; w = nw; } else { var nh = w / R; y0 -= (nh - h); h = nh; }
+  if (a.top) o.push('<rect x="' + (x0 + 4) + '" y="' + (y0 + 4) + '" width="' + (w - 8) + '" height="' + (h - 8) + '" rx="12" fill="var(--ac2)" opacity=".55"/><text x="' + (x0 + w - 12) + '" y="' + (y0 + 18) + '" text-anchor="end" font-size="' + (h / 14).toFixed(1) + '" fill="var(--mut)" font-family="sans-serif">widok z góry</text>');
+  else o.push(ln(x0, 120, x0 + w, 120, "var(--bd)", 2));
+  (a.pr || []).forEach(function (q) {
+    if (q[0] === "door") o.push('<rect x="' + (q[1] - 3) + '" y="8" width="6" height="112" rx="2" fill="var(--bd)"/>');
+    if (q[0] === "wall") o.push('<rect x="' + q[1] + '" y="8" width="8" height="112" fill="var(--bd)"/>');
+    if (q[0] === "pole") o.push(ln(q[1], q[2], q[1], 119, "var(--bd)", 4));
+    if (q[0] === "roll") o.push('<rect x="' + q[1] + '" y="' + (q[2] - 5) + '" width="' + (q[3] - q[1]) + '" height="10" rx="5" fill="var(--ac)" opacity=".35"/>');
+  });
+  o.push(pl([hF[0], hF[1], p[10], p[11], p[12], p[13]], fr, a.front ? 6 : 5));
+  o.push(pl([sF[0], sF[1], p[18], p[19], p[20], p[21]], fr, a.front ? 6 : 5));
+  if (a.g) o.push('<path d="M' + p[4] + " " + p[5] + " Q" + a.g[0] + " " + a.g[1] + " " + p[2] + " " + p[3] + '" fill="none" stroke="' + mu + '" stroke-width="4" stroke-dasharray="4 5" stroke-linecap="round"/>');
+  (a.ga || []).forEach(function (g) { o.push(pl(g, mu, 4, ' stroke-dasharray="4 5"')); });
+  (a.hl || []).forEach(function (h) { o.push('<circle cx="' + h[0] + '" cy="' + h[1] + '" r="' + h[2] + '" fill="' + ac + '" opacity=".3"/>'); });
+  o.push(a.c ? '<path d="M' + p[4] + " " + p[5] + " Q" + a.c[0] + " " + a.c[1] + " " + p[2] + " " + p[3] + '" fill="none" stroke="' + tx + '" stroke-width="7" stroke-linecap="round"/>' : ln(p[4], p[5], p[2], p[3], tx, 7));
+  if (a.s) o.push(ln(a.s[0], a.s[1], a.s[2], a.s[3], tx, 6));
+  if (a.hp) o.push(ln(a.hp[0], a.hp[1], a.hp[2], a.hp[3], tx, 6));
+  o.push('<circle cx="' + p[0] + '" cy="' + p[1] + '" r="7.5" fill="' + tx + '"/>');
+  o.push(pl([hN[0], hN[1], p[6], p[7], p[8], p[9]], tx, 6));
+  o.push(pl([sN[0], sN[1], p[14], p[15], p[16], p[17]], tx, 6));
+  (a.ft || []).forEach(function (f) { o.push(ln(f[0], f[1], f[2], f[3], tx, 5)); });
+  (a.ex || []).forEach(function (f) { o.push(ln(f[0], f[1], f[2], f[3], tx, 4)); });
+  (a.pr || []).forEach(function (q) { if (q[0] === "strap") o.push(ln(q[1], q[2], q[3], q[4], ac, 3, ' stroke-dasharray="5 3"')); });
+  (a.ar || []).forEach(function (r) {
+    var x1 = r[0], y1 = r[1], x2 = r[2], y2 = r[3], an = Math.atan2(y2 - y1, x2 - x1), L = 7, W = 0.5;
+    o.push(ln(x1, y1, x2 - Math.cos(an) * 4, y2 - Math.sin(an) * 4, ac, 3));
+    o.push('<polygon points="' + x2 + "," + y2 + " " + (x2 - L * Math.cos(an - W)) + "," + (y2 - L * Math.sin(an - W)) + " " + (x2 - L * Math.cos(an + W)) + "," + (y2 - L * Math.sin(an + W)) + '" fill="' + ac + '"/>');
+  });
+  return '<svg class="' + (cls || "art") + '" viewBox="' + [x0, y0, w, h].map(function (v) { return Math.round(v * 10) / 10; }).join(" ") + '" role="img" aria-hidden="true">' + o.join("") + "</svg>";
+}
+var ARTN = {}; NAW.STR.concat(NAW.STRX).forEach(function (x) { if (x[5]) ARTN[x[5]] = x[0]; });
+function strCopy(x) { return [x[0], x[1], x[2], x[3], "", x[5], x[6]]; }
+function sideBeep() { try { snd(); if (!AC) return; var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime; o.type = "sine"; o.frequency.value = 660; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + 0.4); } catch (e) {} try { navigator.vibrate && navigator.vibrate([120, 80, 120]); } catch (e) {} }
 function dur(m, i) { return Math.max(5, +S.ex[m][i][3] || 30); }
 function tsum(m) { var t = 0; S.ex[m].forEach(function (e, i) { t += dur(m, i); }); return t; }
 function mv(a, i, d) { var j = i + d; if (j < 0 || j >= a.length) return; var x = a[i]; a[i] = a[j]; a[j] = x; }
 function exIn(m, i, j, v, ph) { return '<input data-f="exf" data-m="' + m + '" data-i="' + i + '" data-j="' + j + '" value="' + esc(v) + '" placeholder="' + ph + '">'; }
 function exEd(m, title) {
   var x = '<div class="card"><h3>' + title + '</h3><div class="btns" style="margin-bottom:8px"><input type="number" min="5" max="600" id="all' + m + '" placeholder="s" style="width:80px"><button class="sec" data-a="exall" data-m="' + m + '">Ustaw czas wszystkim</button></div>';
-  S.ex[m].forEach(function (e, i) { var at = 'data-m="' + m + '" data-i="' + i + '"'; x += '<div class="ed">' + exIn(m, i, 0, e[0], "Nazwa ćwiczenia") + exIn(m, i, 1, e[1], "Wariant A") + exIn(m, i, 2, e[2], "Wariant B") + '<div class="btns"><input type="number" min="5" max="600" data-f="exf" ' + at + ' data-j="3" value="' + dur(m, i) + '" style="width:80px"><span class="note">s</span><button class="sec" data-a="exup" ' + at + '>↑</button><button class="sec" data-a="exdn" ' + at + '>↓</button><button class="sec" data-a="exrm" ' + at + ">🗑</button></div></div>"; });
+  S.ex[m].forEach(function (e, i) { var at = 'data-m="' + m + '" data-i="' + i + '"'; x += '<div class="ed">' + (e[5] && NAW.ART[e[5]] ? artSvg(e[5], "art sm") : "") + exIn(m, i, 0, e[0], "Nazwa ćwiczenia") + exIn(m, i, 1, e[1], m === "r" ? "Jak wykonać" : "Wariant A") + exIn(m, i, 2, e[2], m === "r" ? "Łatwiejsza wersja" : "Wariant B") +
+      '<div class="btns"><select data-f="exf" ' + at + ' data-j="5" style="flex:1"><option value="">— bez rysunku —</option>' + Object.keys(NAW.ART).map(function (id) { return '<option value="' + id + '"' + (e[5] === id ? " selected" : "") + ">" + esc(ARTN[id] || id) + "</option>"; }).join("") + '</select><label class="sw" style="margin:0"><input type="checkbox" data-f="exf" ' + at + ' data-j="6"' + (e[6] ? " checked" : "") + "> obie strony</label></div>" + '<div class="btns"><input type="number" min="5" max="600" data-f="exf" ' + at + ' data-j="3" value="' + dur(m, i) + '" style="width:80px"><span class="note">s</span><button class="sec" data-a="exup" ' + at + '>↑</button><button class="sec" data-a="exdn" ' + at + '>↓</button><button class="sec" data-a="exrm" ' + at + ">🗑</button></div></div>"; });
   return x + '<button class="pri" data-a="exadd" data-m="' + m + '">+ Dodaj ćwiczenie</button></div>';
 }
 function roz() {
   var k = key(new Date()), ro = S.ro[k] || {}, h = "";
   if (P) {
     var L = S.ex[P.m], e = L[P.i];
-    h += '<div class="card"><div class="note" style="text-align:center">Ćwiczenie ' + (P.i + 1) + " z " + L.length + '</div><div class="bar"><i style="width:' + (P.i / L.length * 100) + '%"></i></div><div class="ex" id="xn">' + esc(e[0]) + '</div><div class="var" id="xv">' + esc(P.v === "A" ? e[1] : e[2]) + '</div><div class="big" id="tm">' + P.t + ' s</div><div class="btns c"><button class="sec" data-a="var">Wariant ' + (P.v === "A" ? "B" : "A") + '</button><button class="pri" data-a="run">' + (P.run ? "Pauza" : "Start") + '</button><button class="sec" data-a="nx">Dalej ›</button></div><div class="btns c" style="margin-top:10px"><button class="sec" data-a="xed">' + (edx ? "✓ Gotowe" : "✏️ Edytuj ćwiczenie") + "</button></div>" +
+    h += '<div class="card"><div class="note" style="text-align:center">Ćwiczenie ' + (P.i + 1) + " z " + L.length + '</div><div class="bar"><i style="width:' + (P.i / L.length * 100) + '%"></i></div>' + (e[5] && NAW.ART[e[5]] ? '<div class="artbox">' + artSvg(e[5]) + "</div>" : "") + '<div class="ex" id="xn">' + esc(e[0]) + '</div>' + (e[6] ? '<div class="side' + (P.t <= Math.floor(dur(P.m, P.i) / 2) ? " on" : "") + '" id="side">' + (P.t <= Math.floor(dur(P.m, P.i) / 2) ? "↔️ Druga strona" : "Pierwsza strona · zmiana po " + Math.ceil(dur(P.m, P.i) / 2) + " s") + "</div>" : "") + '<div class="var" id="xv">' + esc(P.v === "A" ? e[1] : e[2]) + '</div><div class="big" id="tm">' + P.t + ' s</div><div class="btns c"><button class="sec" data-a="var">' + (P.m === "r" ? (P.v === "A" ? "Łatwiej" : "Pełna wersja") : "Wariant " + (P.v === "A" ? "B" : "A")) + '</button><button class="pri" data-a="run">' + (P.run ? "Pauza" : "Start") + '</button><button class="sec" data-a="nx">Dalej ›</button></div><div class="btns c" style="margin-top:10px"><button class="sec" data-a="xed">' + (edx ? "✓ Gotowe" : "✏️ Edytuj ćwiczenie") + "</button></div>" +
       (edx ? '<div class="ed">' + exIn(P.m, P.i, 0, e[0], "Nazwa ćwiczenia") + exIn(P.m, P.i, 1, e[1], "Opis / wariant A") + exIn(P.m, P.i, 2, e[2], "Opis / wariant B") + '<div class="btns"><input type="number" min="5" max="600" data-f="exf" data-m="' + P.m + '" data-i="' + P.i + '" data-j="3" value="' + dur(P.m, P.i) + '" style="width:80px"><span class="note">s</span></div></div>' : "") +
       '<h3>Uwagi do ćwiczenia</h3><textarea style="min-height:70px" data-f="exf" data-m="' + P.m + '" data-i="' + P.i + '" data-j="4" placeholder="Twoje uwagi, np. technika, samopoczucie">' + esc(e[4] || "") + '</textarea><div class="foot"><button class="lnk" data-a="stop">Przerwij</button></div></div>';
   } else {
     h += '<div class="g2"><div class="card"><b>Siedząca</b><div class="note">' + S.ex.s.length + " ćw., ok. " + Math.round(tsum("s") / 60) + " min</div><p>" + (ro.s ? "✅ Zrobione" : "Do zrobienia") + '</p><button class="pri" data-a="go" data-m="s">Start</button></div><div class="card"><b>Stojąca</b><div class="note">' + S.ex.t.length + " ćw., ok. " + Math.round(tsum("t") / 60) + " min</div><p>" + (ro.t ? "✅ Zrobione" : "Do zrobienia") + '</p><button class="pri" data-a="go" data-m="t">Start</button></div></div><div class="btns" style="margin-bottom:12px"><button class="sec" data-a="exe">' + (edr ? "✓ Gotowe" : "✏️ Edytuj ćwiczenia i czas") + "</button></div>";
-    if (edr) h += exEd("s", "Siedząca") + exEd("t", "Stojąca");
-    h += '<div class="note">Jedna faza podnosi „Ćwiczenia fizyczne” do Plus, obie do Elita.</div>';
+    var rh = S.set.rzh || "", rhn = rh && rh !== "w2" ? (H.filter(function (y) { return y[0] === rh; })[0] || [])[2] : "";
+    h += '<div class="card str"><div class="sth"><div><b>🧘 Rozciąganie</b><div class="note">' + S.ex.r.length + " ćw., ok. " + Math.round(tsum("r") / 60) + ' min · biodra, kręgosłup, tylna taśma, klatka, ramiona</div></div><button class="pri" data-a="go" data-m="r"' + (S.ex.r.length ? "" : " disabled") + ">Start</button></div><p>" + (ro.r ? "✅ Zrobione" : "Do zrobienia") + "</p>" +
+      '<details class="strl"><summary>📋 Ćwiczenia z rysunkami</summary>' + S.ex.r.map(function (e, i) { return '<div class="sti">' + (e[5] && NAW.ART[e[5]] ? artSvg(e[5], "art sm") : '<div class="art sm noart">🧘</div>') + "<div><b>" + (i + 1) + ". " + esc(e[0]) + "</b><small>" + dur("r", i) + " s" + (e[6] ? " · obie strony" : "") + '</small><div class="note">' + esc(e[1]) + "</div>" + (e[2] ? '<div class="note"><i>' + esc(e[2]) + "</i></div>" : "") + "</div></div>"; }).join("") + "</details>" +
+      '<details class="strl" id="strcat"><summary>📚 Więcej ćwiczeń do wyboru (' + NAW.STRX.length + ")</summary>" + NAW.STRX.map(function (x, i) { var have = S.ex.r.some(function (e) { return e[0] === x[0]; }); return '<div class="sti">' + artSvg(x[5], "art sm") + "<div><b>" + esc(x[0]) + '</b><small><span class="badge">' + esc(x[7]) + "</span> " + x[3] + " s" + (x[6] ? " · obie strony" : "") + '</small><div class="note">' + esc(x[1]) + '</div><button class="sec sm" data-a="stradd" data-i="' + i + '"' + (have ? " disabled" : "") + ">" + (have ? "✓ W zestawie" : "➕ Dodaj do rozciągania") + "</button></div></div>"; }).join("") + "</details>" +
+      '<div class="note" style="margin-top:10px">Rozciągaj do lekkiego napięcia, nie do bólu. Oddychaj spokojnie i nie sprężynuj. Przy ćwiczeniach „na obie strony” w połowie czasu usłyszysz sygnał zmiany strony. Przy bólu kręgosłupa, po urazie lub operacji skonsultuj ćwiczenia z fizjoterapeutą.</div></div>';
+    if (edr) h += exEd("s", "Siedząca") + exEd("t", "Stojąca") + exEd("r", "🧘 Rozciąganie") +
+      '<div class="card"><b>Rozciąganie zalicza nawyk</b><select data-f="rzh" style="margin-top:6px"><option value="">Ćwiczenia fizyczne – jako kolejna faza</option>' + H.filter(function (y) { return y[0] !== "w2"; }).map(function (y) { return '<option value="' + y[0] + '"' + (rh === y[0] ? " selected" : "") + ">" + esc(y[2]) + " (Elita)</option>"; }).join("") + "</select></div>";
+    h += '<div class="note">Jedna faza podnosi „Ćwiczenia fizyczne” do Plus, dwie i więcej do Elita' + (rhn ? ". Rozciąganie zalicza nawyk „" + esc(rhn) + "” na Elita" : " (rozciąganie też się liczy)") + ".</div>";
   }
   return h;
 }
@@ -1610,7 +1668,7 @@ function render() {
   if (locked && LK) { $("v").innerHTML = ""; $("tabs").innerHTML = ""; tzShow(false); closeSheet(true); showLock(); return; }
   document.documentElement.setAttribute("data-theme", S.set.theme === "auto" ? "" : S.set.theme);
   tzShow(tab === "jedz");
-  document.body.classList.toggle("mton", tab === "ment" || tab === "diag");
+  document.body.classList.toggle("mton", tab === "ment" || tab === "diag" || (tab === "roz" && !!P));
   var n = new Date(), hr = n.getHours(), sub = SUBS[tab];
   $("gr").textContent = sub ? sub : tab === "pam" ? "📔 Pamiętnik" : tab === "post" ? "📈 Postęp" : tab === "ment" ? "🧭 Mentor" : tab === "jedz" ? "🍽️ Jedzenie" : tab === "wiecej" ? "Więcej" : hr < 12 ? "Dzień dobry!" : hr < 18 ? "Miłego dnia!" : "Dobry wieczór!";
   $("dt").innerHTML = sub ? '<button class="lnk" data-a="tab" data-id="wiecej" style="font-size:13px;padding:0">‹ Więcej</button>' : n.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }) + " · 🔥 " + streak() + " · 📔 " + dStreak();
@@ -1625,10 +1683,19 @@ function render() {
 function tick() {
   var fa = $("fa"), ac = actF(); if (fa && ac) fa.textContent = hmd(Date.now() - ac.s);
   if (!P || !P.run) return; P.t--;
+  var ce = S.ex[P.m] && S.ex[P.m][P.i];
+  if (ce && ce[6] && P.t > 0 && P.t === Math.floor(dur(P.m, P.i) / 2)) { sideBeep(); var sd = $("side"); if (sd) { sd.textContent = "↔️ Zmień stronę"; sd.classList.add("on"); } }
   if (P.t <= 0) { P.t = 0; P.run = false; beep(); try { navigator.vibrate && navigator.vibrate(300); } catch (e) {} render(); return; }
   var t = $("tm"); if (t) t.textContent = P.t + " s";
 }
-function fin() { var k = key(new Date()); S.ro[k] = S.ro[k] || {}; S.ro[k][P.m] = 1; var n = (S.ro[k].s ? 1 : 0) + (S.ro[k].t ? 1 : 0); S.l[k] = S.l[k] || {}; S.l[k].w2 = Math.max(S.l[k].w2 || 0, n > 1 ? 3 : 2); sv(); P = null; edx = false; render(); }
+function fin() {
+  var k = key(new Date()), rh = S.set.rzh || "", rphase = !rh || rh === "w2"; S.ro[k] = S.ro[k] || {}; S.ro[k][P.m] = 1; S.l[k] = S.l[k] || {};
+  var n = (S.ro[k].s ? 1 : 0) + (S.ro[k].t ? 1 : 0) + (S.ro[k].r && rphase ? 1 : 0);
+  if (n && (P.m !== "r" || rphase)) S.l[k].w2 = Math.max(S.l[k].w2 || 0, n > 1 ? 3 : 2);
+  if (P.m === "r" && !rphase) S.l[k][rh] = 3;
+  if (P.m === "r") toast("🧘 Rozciąganie zrobione – brawo!", 2500);
+  sv(); P = null; edx = false; render();
+}
 var AC = null;
 function snd() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); } catch (e) {} }
 function beep() { try { snd(); if (!AC) return; [0, .3, .6].forEach(function (d, i) { var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + d; o.type = "sine"; o.frequency.value = i === 2 ? 1175 : 880; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.4, t + .02); g.gain.linearRampToValueAtTime(0, t + .22); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + .25); }); } catch (e) {} }
@@ -1751,6 +1818,7 @@ document.addEventListener("click", function (ev) {
     case "rev": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doReview(); break;
     case "chats": { var ci = $("chatin"); if (ci && ci.value.trim()) { var v2 = ci.value, vv = CHATV; stopDict(); if (S.set.tts.mode === "always" || (S.set.tts.mode === "voice" && vv)) ttsUnlock(); chatSend(v2, { v: vv }); } break; }
     case "chatretry": chatAsk(); break;
+    case "stradd": { var sx = NAW.STRX[+t.getAttribute("data-i")]; if (sx && !S.ex.r.some(function (e) { return e[0] === sx[0]; })) { S.ex.r.push(strCopy(sx)); sv(); toast("➕ Dodano: " + sx[0]); var sy = window.scrollY; render(); var sc = $("strcat"); if (sc) sc.open = true; window.scrollTo(0, sy); } break; }
     case "updnow": location.reload(); break;
     case "updchk": updCheckNow(); break;
     case "updforce": updForce(); break;
@@ -1877,6 +1945,8 @@ document.addEventListener("change", function (ev) {
   if (f === "lkm") { S.lk = S.lk || {}; if (t.value) S.lk[id] = { m: t.value, t: TZM[t.value][4] ? TZM[t.value][4].slice() : null }; else delete S.lk[id]; sv(); render(); return; }
   if (f === "lkt") { var lq = S.lk && S.lk[id]; if (lq && lq.t) { lq.t[+t.getAttribute("data-j")] = Math.max(0, Math.round(+t.value || 0)); sv(); } return; }
   if (f === "q") { S.q = t.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean); sv(); return; }
+  if (f === "exf" && (t.getAttribute("data-j") === "5" || t.getAttribute("data-j") === "6")) { var xe5 = S.ex[t.getAttribute("data-m")][+t.getAttribute("data-i")]; if (t.getAttribute("data-j") === "5") xe5[5] = t.value; else xe5[6] = t.checked ? 1 : 0; sv(); render(); return; }
+  if (f === "rzh") { S.set.rzh = t.value; sv(); render(); return; }
   if (f === "exf") { var xe = S.ex[t.getAttribute("data-m")][+t.getAttribute("data-i")], xj = +t.getAttribute("data-j"); xe[xj] = xj === 3 ? Math.max(5, Math.min(600, +t.value || 30)) : t.value; if (xj === 3) t.value = xe[3];
     if (P && P.m === t.getAttribute("data-m") && P.i === +t.getAttribute("data-i")) { var a1 = $("xn"), a2 = $("xv"); if (a1) a1.textContent = xe[0]; if (a2) a2.textContent = P.v === "A" ? xe[1] : xe[2]; if (xj === 3 && !P.run) { P.t = xe[3]; var tm = $("tm"); if (tm) tm.textContent = P.t + " s"; } } sv(); return; }
   if (f === "ry") { var rj = +t.getAttribute("data-j"); S.ry.forEach(function (z) { if (z[0] === id) z[rj] = t.value; }); sv(); return; }
@@ -1887,6 +1957,7 @@ document.addEventListener("keydown", function (ev) { if (ev.key === "Enter" && !
 
 document.addEventListener("visibilitychange", function () { if (document.hidden) hiddenAt = Date.now(); else if (LK && !locked && hiddenAt && Date.now() - hiddenAt > 60000) { locked = true; render(); } });
 tzLinksInit(); v41Init(); v42Init();
+if (S.ex && !S.ex.r) { S.ex.r = NAW.STR.map(strCopy); sv(); }
 if (S.set.lastVer && S.set.lastVer !== VER) setTimeout(function () { toast("✨ Zaktualizowano do wersji " + VER, 4000); }, 600);
 if (S.set.lastVer !== VER) { S.set.lastVer = VER; sv(); }
 if (/[?&]odswiez=/.test(location.search)) { try { history.replaceState(history.state, "", location.pathname); } catch (e) {} }
