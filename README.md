@@ -1,4 +1,4 @@
-# Nawyki i Talerz 4.5
+# Nawyki i Talerz 4.6
 
 Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i Talerz (licznik kalorii ze zdjęć, płyny, kroki, waga) w jednej aplikacji.
 
@@ -15,6 +15,21 @@ Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i
 - **Postęp**: karta „Jedzenie – ostatnie 7 dni” (dni w limicie, cel płynów, warzywa, kroki, zmiana wagi).
 - **Wspólne klucze AI** (Gemini i Claude): klucz dodany w jednym miejscu działa w obu częściach.
 - **Kopia zapasowa** (Więcej → Kopie i dane) zawiera także dane Jedzenia.
+
+## Nowości w 4.6: przerwa nocna (post)
+- **🌙 Przerwa nocna w Jedzeniu.** Karta pokazuje:
+  - godzinę ostatniego posiłku poprzedniego dnia i pierwszego posiłku dnia;
+  - odstęp między nimi w porównaniu z celem postu z Nawyków (16 h), z paskiem i oceną ✅ albo „do celu zabrakło …”;
+  - przed pierwszym posiłkiem: trwający post na żywo i godzinę, od której można jeść;
+  - okno jedzenia (od pierwszego do ostatniego posiłku);
+  - kiedy jutro minie 16 h, jeśli dzisiejszy posiłek był ostatni.
+- Liczą się posiłki i napoje z kaloriami (od ok. 20 kcal). Woda, czarna kawa i herbata nie przerywają postu.
+- **Godzinę posiłku poprawisz**, dotykając jej na liście posiłków (✎), np. gdy zapisujesz posiłek później.
+- **W Nawykach:**
+  - wieczorny bilans podaje, o której minie post;
+  - Postęp pokazuje średnią przerwę nocną z tygodnia;
+  - mentor widzi okno jedzenia i przerwę;
+  - w „✏️ Edytuj nawyki” można podpiąć nawyk pod miarę ⚡ „Przerwa nocna” (domyślnie 12 / 14 / 16 h).
 
 ## Nowości w 4.5: rozciąganie w Rozruchu
 - **🧘 Rozciąganie** to nowy kafelek w Więcej → Rozruch. Zestaw ma 10 ćwiczeń (ok. 9 min) na:

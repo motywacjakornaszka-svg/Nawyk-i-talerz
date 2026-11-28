@@ -1,7 +1,7 @@
-/* Nawyki i Talerz 4.5 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
+/* Nawyki i Talerz 4.6 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
 (function () {
 "use strict";
-var VER = "4.5";
+var VER = "4.6";
 var KEY = "nawyki-v3", OLD = "nawyki-v2", KEYS = "nawyki-v3-klucze";
 var CATS = NAW.CATS, LV = NAW.LV, ST = NAW.ST, ET = NAW.ET, PROV = NAW.PROV;
 
@@ -145,23 +145,30 @@ function tz(k) {
   var d = tzGet("day-" + k), r = null;
   if (d && ((d.meals || []).length || (d.drinks || []).length || d.steps || d.extra)) {
     var cust = {}; ((tzProf() || {}).customDrinks || []).forEach(function (c) { cust[c.k] = c; });
-    var ml = 0, dk = 0, ds = 0, sw = 0, jui = 0, alc = 0, kcal = 0, sug = 0, veg = 0, pr = 0, cb = 0, ft = 0, late = 0, ML = [];
+    var ml = 0, dk = 0, ds = 0, sw = 0, jui = 0, alc = 0, kcal = 0, sug = 0, veg = 0, pr = 0, cb = 0, ft = 0, late = 0, ML = [], EM = [];
     (d.drinks || []).forEach(function (x) {
       var t = x.type || "woda", v = +x.ml || 0, c = cust[t], df = c ? [+c.kcal || 0, +c.sug || 0, c.alc ? 1 : 0, 0, !c.alc && +c.sug >= 2.5 ? 1 : 0] : (TZ_DR[t] || [0, 0]);
       if (df[2]) alc += v; else ml += v; dk += df[0] * v / 100; ds += df[1] * v / 100; if (df[4]) sw += v; if (df[3]) jui += v;
+      if (df[0] * v / 100 >= 20 && hmM(x.t) != null) EM.push(hmM(x.t));
     });
     if (jui > 150) sw += jui - 150;
     (d.meals || []).forEach(function (m) {
-      kcal += +m.kcal || 0; pr += +m.p || 0; cb += +m.c || 0; ft += +m.f || 0; if (m.time && m.time >= "20:00") late++;
+      kcal += +m.kcal || 0; pr += +m.p || 0; cb += +m.c || 0; ft += +m.f || 0; if (m.time && m.time >= "20:00") late++; if (hmM(m.time) != null) EM.push(hmM(m.time));
       (m.items || []).forEach(function (x) { if (TZ_VEG[x.cat]) veg += +x.grams || 0; sug += +x.sug || 0; });
       ML.push((m.time ? m.time + " " : "") + (m.name || "posiłek") + " " + Math.round(+m.kcal || 0) + " kcal (B" + Math.round(+m.p || 0) + " W" + Math.round(+m.c || 0) + " T" + Math.round(+m.f || 0) + ")");
     });
     r = { ml: Math.round(ml), wg: tzWaterGoal(d.steps), veg: Math.round(veg), sug: Math.round(sug + ds), kcal: Math.round(kcal + dk), dk: Math.round(dk), p: Math.round(pr), c: Math.round(cb + ds), f: Math.round(ft),
       lim: d.limit ? Math.round(d.limit) : null, steps: +d.steps || 0, ex: +d.extra || 0, meals: (d.meals || []).length, sw: Math.round(sw), alc: Math.round(alc), late: late, ML: ML,
       names: (d.meals || []).map(function (m) { return m.name; }).filter(Boolean) };
+    EM.sort(function (a, b) { return a - b; }); r.t1 = EM.length ? EM[0] : null; r.t2 = EM.length ? EM[EM.length - 1] : null;
   }
   return (TZC[k] = r);
 }
+/* godziny jedzenia: minuty od północy; przerwa nocna = od ostatniego posiłku poprzedniego dnia do pierwszego posiłku dnia */
+function hmM(t) { var m = /(\d{1,2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : null; }
+function mHM(v) { v = ((Math.round(v) % 1440) + 1440) % 1440; return pad(Math.floor(v / 60)) + ":" + pad(v % 60); }
+function tzGap(k) { var d = k2d(k); d.setDate(d.getDate() - 1); var a = tz(key(d)), b = tz(k); return a && b && a.t2 != null && b.t1 != null ? b.t1 + 1440 - a.t2 : null; }
+function hTxt(min) { min = Math.round(min); var h = Math.floor(min / 60), m = min % 60; return h + " h" + (m ? " " + m + " min" : ""); }
 function tzWeights() { var p = tzProf(); return (p && p.weights || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }); }
 function kgf(v) { return String(Math.round(v * 10) / 10).replace(".", ","); }
 /* trend wagi: średnia z 7 dni i tempo (prosta dopasowana do wpisów z 28 dni) – jak na wykresie w Jedzeniu */
@@ -189,7 +196,8 @@ var TZM = {
   protein: ["🥩 Białko (% dziennej normy)", "% normy", 1, function (t) { return Math.round(t.p / tzProtT() * 100); }, [50, 75, 100]],
   steps: ["👟 Kroki", "kroków", 1, function (t) { return t.steps; }, [4000, 7000, 10000]],
   sugar: ["🍬 Cukry wolne (najwyżej)", "g", -1, function (t) { return t.sug; }, [50, 30, 15]],
-  log: ["🍽️ Jedzenie zapisane i w limicie", "", 0, null, null]
+  log: ["🍽️ Jedzenie zapisane i w limicie", "", 0, null, null],
+  fast: ["🌙 Przerwa nocna (post)", "h", 1, null, [12, 14, 16]]
 };
 var TZDEF = [["w8", "water"], ["w7", "veg"], ["w3", "steps"]];
 function tzLinksInit() {
@@ -207,6 +215,7 @@ function autoLv(k, id) {
   var t = tz(k); if (!t) return 0;
   if (L.m === "log") return t.meals >= 3 && t.lim && t.kcal <= t.lim ? 3 : t.meals >= 3 ? 2 : t.meals ? 1 : 0;
   if (L.m === "protein" && !t.meals) return 0;
+  if (L.m === "fast") { var gq = tzGap(k), fq = L.t || M[4]; if (gq == null) return 0; gq /= 60; return gq >= fq[2] ? 3 : gq >= fq[1] ? 2 : gq >= fq[0] ? 1 : 0; }
   var v = M[3](t), q = L.t || M[4];
   if (M[2] < 0) { if (!t.meals) return 0; return v <= q[2] ? 3 : v <= q[1] ? 2 : v <= q[0] ? 1 : 0; }
   return v >= q[2] ? 3 : v >= q[1] ? 2 : v >= q[0] ? 1 : 0;
@@ -215,6 +224,7 @@ function autoTxt(k, id) {
   var L = S.lk && S.lk[id], M = L && TZM[L.m]; if (!M) return "";
   var t = tz(k) || { ml: 0, veg: 0, steps: 0, sug: 0, meals: 0, kcal: 0, p: 0, lim: null };
   if (L.m === "log") return "⚡ posiłki: " + t.meals + (t.lim ? " · " + t.kcal + "/" + t.lim + " kcal" : "");
+  if (L.m === "fast") { var gp = tzGap(k), fq2 = L.t || M[4]; return gp == null ? "⚡ przerwa nocna: brak danych" : "⚡ przerwa nocna " + hTxt(gp) + (gp / 60 >= fq2[2] ? " ✓" : " · Elita od " + fq2[2] + " h"); }
   var q = L.t || M[4], v = M[3](t);
   if (M[2] < 0) return "⚡ " + v + " " + M[1] + (t.meals ? "" : " (brak posiłków)") + " · Elita ≤ " + q[2];
   var nx = v < q[0] ? ["Mini", q[0]] : v < q[1] ? ["Plus", q[1]] : v < q[2] ? ["Elita", q[2]] : null;
@@ -297,6 +307,7 @@ function evCard(k) {
   h += '<div class="evl"><i>✅</i><span>Nawyki: ' + done + "/" + H.length + " zaliczone dziś</span></div>";
   if (r.length) h += '<div class="evl"><i>🔥</i><span>Nie przerwij serii – wystarczy Mini: ' + r.slice(0, 4).map(function (x) { return "<b>" + esc(x[0][2]) + "</b> (" + x[1] + " " + pl(x[1], "dzień", "dni", "dni") + ")"; }).join(", ") + "</span></div>";
   if (dLv(k) === 0) h += '<div class="evl"><i>📔</i><span>Pamiętnik: odpowiedz na pytania dnia – wystarczy jedno zdanie</span></div>';
+  var te = tz(k); if (te && te.t2 != null) { var fe = te.t2 + (S.fg || 16) * 60; h += '<div class="evl"><i>🌙</i><span>Jeśli ' + mHM(te.t2) + " to ostatni posiłek, post " + (S.fg || 16) + " h minie " + (fe >= 1440 ? "jutro" : "dziś") + " o <b>" + mHM(fe) + "</b></span></div>"; }
   h += hasAI() ? '<div class="btns" style="margin-top:10px"><button class="pri sm" data-a="tmrw">🧭 Co zjeść jutro?</button></div>' : '<div class="note" style="margin-top:8px">Dodaj klucz AI w Ustawieniach, a mentor zaproponuje jadłospis na jutro.</div>';
   return h + "</div>";
 }
@@ -654,6 +665,8 @@ function foodWeek() {
   h += '<div class="st"><b>' + W.filter(function (t) { return t.ml >= t.wg; }).length + '/7</b><span>dni z celem płynów</span></div>';
   h += '<div class="st"><b>' + avg(L, function (t) { return t.veg; }) + ' g</b><span>średnio warzyw i owoców</span></div>';
   h += '<div class="st"><b>' + avg(W, function (t) { return t.steps; }).toLocaleString("pl-PL") + '</b><span>średnio kroków</span></div></div>';
+  var gps = D.map(tzGap).filter(function (x) { return x != null; });
+  if (gps.length) h += '<div class="note" style="margin-top:8px">🌙 Przerwa nocna: średnio ' + hTxt(gps.reduce(function (a, b) { return a + b; }, 0) / gps.length) + " · cel " + (S.fg || 16) + " h osiągnięty " + gps.filter(function (x) { return x >= (S.fg || 16) * 60; }).length + "/" + gps.length + " " + pl(gps.length, "dzień", "dni", "dni") + "</div>";
   h += '<div style="margin-top:10px">' + wgLine() + "</div>";
   var tr = tzTrend(); if (tr) h += '<div class="note" style="margin-top:8px">' + trendTxt(tr) + "</div>";
   var ws = tzWeights(), a = ws.filter(function (w) { return w.date >= key(ago(30)); });
@@ -943,10 +956,10 @@ function ctx(nd) {
     o.push(line);
   }
   if (sh.t) {
-    var fd7 = []; for (var j = Math.min(nd, 7) - 1; j >= 0; j--) { var kj = key(ago(j)), tj = tz(kj); if (tj && tj.meals) fd7.push(kj + ": " + tj.ML.join("; ") + (tj.dk ? "; napoje " + tj.dk + " kcal" : "") + (tj.sw ? "; słodkie napoje " + tj.sw + " ml" : "") + (tj.alc ? "; alkohol " + tj.alc + " ml" : "")); }
+    var fd7 = []; for (var j = Math.min(nd, 7) - 1; j >= 0; j--) { var kj = key(ago(j)), tj = tz(kj); if (tj && tj.meals) fd7.push(kj + ": " + tj.ML.join("; ") + (tj.dk ? "; napoje " + tj.dk + " kcal" : "") + (tj.sw ? "; słodkie napoje " + tj.sw + " ml" : "") + (tj.alc ? "; alkohol " + tj.alc + " ml" : "") + (tj.t1 != null ? "; okno jedzenia " + mHM(tj.t1) + "–" + mHM(tj.t2) : "") + (tzGap(kj) != null ? "; przerwa nocna przed tym dniem " + hTxt(tzGap(kj)) : "")); }
     if (fd7.length) { o.push("POSIŁKI – SZCZEGÓŁY OSTATNICH DNI (godzina, nazwa, kcal, B/W/T w g):"); fd7.forEach(function (x) { o.push(x.slice(0, 900)); }); }
     var tfv = (tzProf() || {}).fav || []; if (tfv.length) o.push("ULUBIONE POSIŁKI: " + tfv.slice(0, 15).map(function (m) { return m.name + " (" + Math.round(+m.kcal || 0) + " kcal)"; }).join(", "));
-    o.push("DZIENNA NORMA BIAŁKA: ok. " + tzProtT() + " g; warzywa i owoce: 400 g; cukry wolne: maks. 30 g.");
+    o.push("DZIENNA NORMA BIAŁKA: ok. " + tzProtT() + " g; warzywa i owoce: 400 g; cukry wolne: maks. 30 g. CEL POSTU (przerwa nocna): " + (S.fg || 16) + " h.");
     var ttr = tzTrend(); if (ttr) o.push("TREND WAGI: " + trendTxt(ttr).replace(/^\S+\s/, ""));
     if (S.wg) o.push("CEL ŻYWIENIOWY TYGODNIA: " + WG[S.wg.g][0] + " – " + wgCount(S.wg) + "/" + S.wg.n + " dni (tydzień od " + S.wg.wk + ")");
     (S.wgh || []).slice(-4).forEach(function (w) { o.push("- poprzedni tydzień od " + w.wk + ": " + (WG[w.g] ? WG[w.g][0] : w.g) + " – " + w.done + "/" + w.n); });

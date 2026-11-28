@@ -359,6 +359,17 @@
   .stat.hasdk b{margin-left:auto}
   .stat.hasdk::after{content:'🥤 ' attr(data-dk);flex-basis:100%;text-align:right;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
   .wtrend{font-size:13px;font-weight:600;margin:2px 0 6px}
+  /* ---------- 4.6: przerwa nocna (post) ---------- */
+  #fastCard .fh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .frow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0;font-size:14px}
+  .frow b{font-variant-numeric:tabular-nums}
+  .fgap{font-size:18px;font-weight:800;margin:8px 0 6px}
+  .fgap.ok{color:var(--accent)} .fgap.short{color:var(--warn)} .fgap.live{color:var(--ink)}
+  .fbar{position:relative;height:10px;border-radius:999px;background:var(--line);overflow:visible;margin-bottom:8px}
+  .fbar i{display:block;height:100%;border-radius:999px;background:var(--accent)}
+  .fbar s{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);opacity:.6;text-decoration:none}
+  .tbtn{border:0;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline dotted;cursor:pointer}
+  .tinp{font:inherit;font-size:13px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
   /* ---------- tryb osadzony: zakładka „Jedzenie” w Nawykach ---------- */
   html.embed .wrap{padding:10px 14px 96px}
   html.embed header.top{margin-bottom:8px}
@@ -430,6 +441,9 @@
       <div class="q" id="qSugar"><div class="qi">🍬</div><div class="qv"><b></b><span></span></div><div class="bar"><i></i></div></div>
       <div class="q" id="qDrink"><div class="qi">💧</div><div class="qv"><b></b><span></span></div><div class="bar"><i></i></div></div>
     </div>
+
+    <!-- przerwa nocna (post) -->
+    <div class="card hidden" id="fastCard"></div>
 
     <!-- płyny -->
     <div class="card" id="waterCard">
@@ -676,7 +690,7 @@
 <div class="toast" id="toast"></div>
 <script>
 (() => {
-  const APP_VERSION = '17 · 4.1';
+  const APP_VERSION = '17 · 4.6';
   // ---------- narzędzia ----------
   const $ = id => document.getElementById(id);
   const r0 = n => Math.round(Number(n) || 0);
@@ -839,6 +853,57 @@
     $('nextDay').disabled = dayKey >= t; $('nextDay').style.opacity = dayKey >= t ? .35 : 1;
   }
 
+  // ---------- PRZERWA NOCNA: ostatni posiłek poprzedniego dnia → pierwszy posiłek dnia ----------
+  // cel postu bierzemy z Nawyków (post przerywany), domyślnie 16 h
+  function fastGoal(){ try { const s = JSON.parse(localStorage.getItem('nawyki-v3') || '{}'); return +s.fg > 0 ? +s.fg : 16; } catch { return 16; } }
+  const tmin = t => { const m = /(\d{1,2}):(\d{2})/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+  const hmTxt = v => { v = Math.max(0, Math.round(v)); const h = Math.floor(v / 60), m = v % 60; return (h ? h + ' h' : '') + (m ? (h ? ' ' : '') + m + ' min' : (h ? '' : '0 min')); };
+  const clockOf = v => fromMin(((Math.round(v) % 1440) + 1440) % 1440);
+  // posiłki i napoje z kaloriami (od ok. 20 kcal) – woda, czarna kawa i herbata nie przerywają postu
+  function eatMins(rec){
+    if (!rec) return [];
+    const a = (rec.meals || []).map(m => tmin(m.time)).filter(v => v != null);
+    (rec.drinks || []).forEach(d => { const df = drinkDef(d.type || 'woda'); if ((+df.kcal || 0) * (+d.ml || 0) / 100 >= 20) { const v = tmin(d.t); if (v != null) a.push(v); } });
+    return a.sort((x, y) => x - y);
+  }
+  function renderFast(){
+    const box = $('fastCard'); if (!box || !day) return;
+    const g = fastGoal(), G = g * 60, d0 = parseKey(dayKey), prev = new Date(d0); prev.setDate(d0.getDate() - 1);
+    let pr = null; try { pr = JSON.parse(localStorage.getItem('talerz:day-' + keyOf(prev))); } catch {}
+    const P = eatMins(pr), T = eatMins(day), isToday = dayKey === todayKey(), now = nowMin();
+    if (!P.length && !T.length) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const lastP = P.length ? P[P.length - 1] : null, firstT = T.length ? T[0] : null, lastT = T.length ? T[T.length - 1] : null;
+    const dn = isToday ? 'dziś' : 'tego dnia', pn = isToday ? 'wczoraj' : 'dzień wcześniej';
+    let h = `<div class="fh"><h2 style="margin:0">🌙 Przerwa nocna</h2><span class="muted small">cel postu ${g} h</span></div>`;
+    if (lastP != null) {
+      h += `<div class="frow"><span>Ostatni posiłek ${pn}</span><b>${fromMin(lastP)}</b></div>`;
+      let gap = null, live = false;
+      if (firstT != null) { gap = firstT + 1440 - lastP; h += `<div class="frow"><span>Pierwszy posiłek ${dn}</span><b>${fromMin(firstT)}</b></div>`; }
+      else if (isToday) { gap = now + 1440 - lastP; live = true; h += `<div class="frow"><span>Pierwszy posiłek dziś</span><b class="muted">jeszcze nie</b></div>`; }
+      if (gap != null) {
+        const ok = gap >= G;
+        h += `<div class="fgap ${ok ? 'ok' : live ? 'live' : 'short'}">${live ? '⏳ Trwa post: ' : 'Odstęp: '}${hmTxt(gap)}${ok ? ' ✅' : live ? '' : ' · do celu zabrakło ' + hmTxt(G - gap)}</div>`;
+        h += `<div class="fbar" title="0–24 h, kreska = cel"><i style="width:${Math.min(100, gap / 1440 * 100).toFixed(1)}%"></i><s style="left:${Math.min(100, G / 1440 * 100).toFixed(1)}%"></s></div>`;
+        if (live) h += `<div class="small muted">${ok ? `Cel ${g} h osiągnięty – możesz zjeść, kiedy zechcesz.` : `Do ${g} h zostało ${hmTxt(G - gap)} – możesz zjeść od <b>${clockOf(lastP + G)}</b>.`}</div>`;
+        if (gap > 30 * 60) h += `<div class="small muted">Bardzo długa przerwa – sprawdź, czy wszystkie posiłki są zapisane.</div>`;
+      }
+    } else h += `<div class="small muted">Brak zapisanych posiłków z poprzedniego dnia – przerwa nocna policzy się, gdy zapiszesz kolację.</div>`;
+    if (T.length >= 2) h += `<div class="frow" style="margin-top:6px"><span>Okno jedzenia ${dn}</span><b>${fromMin(firstT)}–${fromMin(lastT)} <span class="muted small">(${hmTxt(lastT - firstT)})</span></b></div>`;
+    if (isToday && lastT != null) { const tg = lastT + G; h += `<div class="small" style="margin-top:6px">Jeśli ${fromMin(lastT)} to ostatni posiłek, ${g} h minie <b>${tg >= 1440 ? 'jutro' : 'dziś'} o ${clockOf(tg)}</b>${now > lastT ? `<span class="muted"> · od ostatniego posiłku: ${hmTxt(now - lastT)}</span>` : ''}.</div>`; }
+    h += `<div class="small muted" style="margin-top:6px">Woda, czarna kawa i herbata nie przerywają postu. Godzinę posiłku poprawisz, dotykając jej na liście (✎).</div>`;
+    box.innerHTML = h;
+  }
+  // poprawa godziny posiłku (np. gdy zapisujesz go później)
+  function editMealTime(m, tb){
+    const inp = Object.assign(document.createElement('input'), { type:'time', value:m.time || '' }); inp.className = 'tinp';
+    tb.replaceWith(inp); inp.focus(); try { inp.showPicker && inp.showPicker(); } catch {}
+    let done = false;
+    const commit = async () => { if (done) return; done = true; if (inp.value && inp.value !== m.time) { m.time = inp.value; await saveDay(); toast('🕒 Godzina posiłku: ' + m.time); } renderToday(); };
+    inp.addEventListener('change', commit); // zapis dopiero po wybraniu godziny (zamknięcie okienka bez zmiany niczego nie psuje)
+  }
+  setInterval(() => { if (day && dayKey === todayKey() && !document.hidden) renderFast(); }, 60 * 1000);
+
   function renderToday(){
     if (!day) return;
     renderDateLabel();
@@ -880,6 +945,7 @@
 
     renderQuality();
     renderMeals(t);
+    renderFast();
     renderWater();
     clearTimeout(mvT); mvT = setTimeout(renderMotivation, 120);
   }
@@ -910,7 +976,9 @@
       const sc = mealScore(m);
       const nm = document.createElement('div'); nm.className = 'name'; nm.innerHTML = (sc ? dot(sc) : '') + esc(m.name || 'Posiłek');
       const sub = document.createElement('div'); sub.className = 'small muted';
-      sub.textContent = `${m.time || ''} · B ${r0(m.p)} · W ${r0(m.c)} · T ${r0(m.f)} g`;
+      const tb = document.createElement('button'); tb.type = 'button'; tb.className = 'tbtn'; tb.textContent = (m.time || '--:--') + ' ✎'; tb.title = 'Zmień godzinę posiłku';
+      tb.onclick = () => editMealTime(m, tb);
+      sub.append(tb, document.createTextNode(` · B ${r0(m.p)} · W ${r0(m.c)} · T ${r0(m.f)} g`));
       info.append(nm, sub);
       const sw = sc && sc <= 2 ? mealSwap(m) : null;
       if (sw) { const s = document.createElement('div'); s.className = 'swap'; s.textContent = sw; info.appendChild(s); }
