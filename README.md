@@ -1,4 +1,4 @@
-# Nawyki i Talerz 4.6
+# Nawyki i Talerz 4.7
 
 Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i Talerz (licznik kalorii ze zdjęć, płyny, kroki, waga) w jednej aplikacji.
 
@@ -15,6 +15,11 @@ Elastyczne nawyki (Mini / Plus / Elita, pamiętnik, cele, projekty, mentor AI) i
 - **Postęp**: karta „Jedzenie – ostatnie 7 dni” (dni w limicie, cel płynów, warzywa, kroki, zmiana wagi).
 - **Wspólne klucze AI** (Gemini i Claude): klucz dodany w jednym miejscu działa w obu częściach.
 - **Kopia zapasowa** (Więcej → Kopie i dane) zawiera także dane Jedzenia.
+
+## Nowości w 4.7: własna kolejność kafelków i zakładek
+- **Przytrzymaj** kafelek w Więcej albo zakładkę na dolnym pasku przez ok. pół sekundy. Element uniesie się (krótka wibracja). Przesuń go palcem w nowe miejsce i puść.
+- Zwykłe dotknięcie dalej otwiera kafelek lub zakładkę, a przewijanie niczego nie przestawia.
+- Kolejność zapisuje się w ustawieniach (także w kopii zapasowej). Ustawienia → ↕️ Kolejność → „↺ Przywróć domyślną kolejność”.
 
 ## Nowości w 4.6: przerwa nocna (post)
 - **🌙 Przerwa nocna w Jedzeniu.** Karta pokazuje:

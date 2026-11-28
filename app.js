@@ -1,7 +1,7 @@
-/* Nawyki i Talerz 4.6 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
+/* Nawyki i Talerz 4.7 – Elastyczne nawyki + licznik kalorii Talerz w jednej aplikacji */
 (function () {
 "use strict";
-var VER = "4.6";
+var VER = "4.7";
 var KEY = "nawyki-v3", OLD = "nawyki-v2", KEYS = "nawyki-v3-klucze";
 var CATS = NAW.CATS, LV = NAW.LV, ST = NAW.ST, ET = NAW.ET, PROV = NAW.PROV;
 
@@ -1376,7 +1376,8 @@ function wiecej() {
   var act = S.pj.filter(function (p) { return p.status === "doing"; }).length, ig = S.g.filter(function (g) { return !g.done; }).length;
   var t = [["proj", "💡", "Pomysły i projekty", S.pj.length + " · w toku " + act], ["cele", "🎯", "Cele", ig + " aktywnych"], ["roz", "🤸", "Rozruch", "rozruch i 🧘 rozciąganie"], ["ryt", "⏰", "Rytm dnia", "plan i przypomnienia"], ["fast", "🌙", "Post przerywany", actF() ? "trwa teraz" : "historia i cel"], ["rap", "📊", "Raport", "PDF, CSV, udostępnij"], ["jedz", "🍽️", "Jedzenie – profil", "dane, limit, wygląd"], ["ust", "⚙️", "Ustawienia i AI", hasAI() ? prov().n : "dodaj klucz API"], ["diag", "🔧", "Diagnostyka AI", dgSum()], ["dane", "💾", "Kopie i dane", S.bk ? "kopia " + new Date(S.bk).toLocaleDateString("pl-PL") : "brak kopii"]];
   t = t.filter(function (x) { return x[0] === "proj" ? on("proj") : x[0] === "ryt" ? on("ryt") : x[0] === "fast" ? on("fast") : true; });
-  return '<div class="g2">' + t.map(function (x) { return '<div class="tile" data-a="' + (x[0] === "jedz" ? 'tzgo" data-id="profil' : 'tab" data-id="' + x[0]) + '"><i>' + x[1] + "</i>" + x[2] + "<small>" + esc(x[3]) + "</small></div>"; }).join("") + '</div><div class="note" style="text-align:center">Nawyki i Talerz ' + VER + ' · <button class="lnk" data-a="updchk" style="font-size:inherit">🔄 Sprawdź aktualizację</button></div>';
+  t = ordBy(t, S.set.tileOrd);
+  return '<div class="g2 tiles" id="tiles">' + t.map(function (x) { return '<div class="tile" data-k="' + x[0] + '" data-a="' + (x[0] === "jedz" ? 'tzgo" data-id="profil' : 'tab" data-id="' + x[0]) + '"><i>' + x[1] + "</i>" + x[2] + "<small>" + esc(x[3]) + "</small></div>"; }).join("") + '</div><div class="note" style="text-align:center;margin:-4px 0 10px">💡 Przytrzymaj kafelek lub zakładkę na dole i przesuń, aby zmienić kolejność.</div><div class="note" style="text-align:center">Nawyki i Talerz ' + VER + ' · <button class="lnk" data-a="updchk" style="font-size:inherit">🔄 Sprawdź aktualizację</button></div>';
 }
 
 /* ---------- ROZRUCH i ROZCIĄGANIE ---------- */
@@ -1603,6 +1604,7 @@ function ust() {
     '<label class="sw" style="margin-top:8px"><input type="checkbox" data-f="drOn"' + (S.set.drOn ? " checked" : "") + '> 📔 Pamiętnik – gdy tego dnia nic jeszcze nie zapisałeś</label><div class="btns"><span class="note">Godzina:</span><input type="time" data-f="dr" value="' + esc(S.set.dr) + '"></div>' +
     '<div class="btns" style="margin-top:10px">' + (nok && npm === "granted" ? '<button class="sec sm" data-a="ntest">Testuj powiadomienie</button>' : "") + '<button class="sec sm" data-a="ics">📅 Dodaj do kalendarza (.ics)</button></div>' +
     '<div class="note" style="margin-top:6px">Powiadomienia z aplikacji przychodzą, gdy jest otwarta lub działa w tle. Najpewniejsze są przypomnienia w kalendarzu telefonu: plik .ics doda codzienne przypomnienia (bilans, serie, pamiętnik i nawyki z godziną), a po ich dotknięciu otworzysz aplikację i zobaczysz bilans. Godzinę przypomnienia nawyku ustawisz w Dziś → ✏️ Edytuj nawyki.</div></div>';
+  h += '<h3>↕️ Kolejność</h3><div class="card"><div class="note" style="margin-bottom:8px">Kafelki w Więcej i zakładki na dole przenosisz, przytrzymując je dłużej i przesuwając palcem.</div><button class="sec" data-a="ordreset"' + (S.set.tabOrd || S.set.tileOrd ? "" : " disabled") + ">↺ Przywróć domyślną kolejność</button></div>";
   h += '<h3>🧩 Moduły</h3><div class="card">' + [["fast", "🌙 Post przerywany"], ["ryt", "⏰ Rytm dnia"], ["proj", "💡 Pomysły i projekty"]].map(function (x) { return '<label class="sw"><input type="checkbox" data-f="mod" value="' + x[0] + '"' + (on(x[0]) ? " checked" : "") + "> " + x[1] + "</label>"; }).join("") + '<div class="note">Wyłączone moduły znikają z menu Więcej i z rozmów z mentorem. Ich dane zostają – po włączeniu wszystko wróci.</div></div>';
   h += '<h3>Wygląd</h3><div class="card"><select data-f="theme"><option value="auto"' + (S.set.theme === "auto" ? " selected" : "") + '>Motyw systemowy</option><option value="light"' + (S.set.theme === "light" ? " selected" : "") + '>Jasny</option><option value="dark"' + (S.set.theme === "dark" ? " selected" : "") + ">Ciemny</option></select></div>";
   return h;
@@ -1686,9 +1688,11 @@ function render() {
   $("gr").textContent = sub ? sub : tab === "pam" ? "📔 Pamiętnik" : tab === "post" ? "📈 Postęp" : tab === "ment" ? "🧭 Mentor" : tab === "jedz" ? "🍽️ Jedzenie" : tab === "wiecej" ? "Więcej" : hr < 12 ? "Dzień dobry!" : hr < 18 ? "Miłego dnia!" : "Dobry wieczór!";
   $("dt").innerHTML = sub ? '<button class="lnk" data-a="tab" data-id="wiecej" style="font-size:13px;padding:0">‹ Więcej</button>' : n.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" }) + " · 🔥 " + streak() + " · 📔 " + dStreak();
   var nt = sub ? "wiecej" : tab;
-  $("tabs").innerHTML = TABS.map(function (t) { return '<button class="' + (nt === t[0] ? "on" : "") + '" data-a="tab" data-id="' + t[0] + '"><i>' + t[1] + "</i>" + t[2] + "</button>"; }).join("");
+  $("tabs").innerHTML = ordBy(TABS, S.set.tabOrd).map(function (t) { return '<button class="' + (nt === t[0] ? "on" : "") + '" data-a="tab" data-id="' + t[0] + '"><i>' + t[1] + "</i>" + t[2] + "</button>"; }).join("");
+  setupReorder($("tabs"), "button", function (ids) { S.set.tabOrd = ids; sv(); render(); toast("✓ Nowa kolejność zakładek", 1800); });
   var V = { jedz: function () { return ""; }, dzis: dzis, pam: pam, post: post, ment: ment, wiecej: wiecej, proj: proj, cele: cele, roz: roz, ryt: ryt, fast: fast, rap: rap, ust: ust, dane: dane, diag: diag };
   $("v").innerHTML = (V[tab] || dzis)();
+  if ($("tiles")) setupReorder($("tiles"), ".tile", function (ids) { S.set.tileOrd = ids; sv(); render(); toast("✓ Nowa kolejność kafelków", 1800); });
   var bb = $("back"); if (bb) bb.hidden = !(navD > 0);
   addMics($("v"));
   hydrate();
@@ -1774,6 +1778,52 @@ function syncKeys() {
   return chN;
 }
 
+/* ---------- PRZENOSZENIE PRZYTRZYMANIEM (kafelki i zakładki) ----------
+   Przytrzymaj ok. pół sekundy – element „unosi się” (krótka wibracja), przesuń go palcem i puść. Kolejność zapisuje się w ustawieniach (także w kopii). */
+var DRG = null, dragEnd = 0;
+function ordBy(list, ord) {
+  if (!ord || !ord.length) return list;
+  var ix = {}; ord.forEach(function (id, i) { ix[id] = i; });
+  return list.map(function (x, i) { return [x, ix[x[0]] == null ? 1000 + i : ix[x[0]]]; }).sort(function (a, b) { return a[1] - b[1]; }).map(function (z) { return z[0]; });
+}
+function setupReorder(box, sel, save) {
+  if (!box || box._ro) return; box._ro = 1;
+  box.addEventListener("pointerdown", function (ev) {
+    var it = ev.target.closest(sel); if (!it || !box.contains(it) || (ev.pointerType === "mouse" && ev.button !== 0) || DRG) return;
+    var sx = ev.clientX, sy = ev.clientY, pid = ev.pointerId, timer = setTimeout(start, 450);
+    function pre(e) { if (e.pointerId === pid && (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8)) stop0(); }
+    function up0(e) { if (e.pointerId === pid) stop0(); }
+    function stop0() { clearTimeout(timer); document.removeEventListener("pointermove", pre); document.removeEventListener("pointerup", up0); document.removeEventListener("pointercancel", up0); }
+    document.addEventListener("pointermove", pre); document.addEventListener("pointerup", up0); document.addEventListener("pointercancel", up0);
+    function start() {
+      stop0(); var r = it.getBoundingClientRect(), g = it.cloneNode(true);
+      DRG = { it: it, pid: pid, dx: sx - r.left, dy: sy - r.top, g: g };
+      try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+      g.classList.add("dragghost"); if (box.id === "tabs") g.classList.add("tabghost"); g.removeAttribute("id"); g.style.width = r.width + "px"; g.style.height = r.height + "px"; g.style.left = r.left + "px"; g.style.top = r.top + "px";
+      document.body.appendChild(g); it.classList.add("dragging"); box.classList.add("reordering");
+      document.addEventListener("pointermove", mv); document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end);
+    }
+    function mv(e) {
+      if (!DRG || e.pointerId !== DRG.pid) return;
+      DRG.g.style.left = (e.clientX - DRG.dx) + "px"; DRG.g.style.top = (e.clientY - DRG.dy) + "px";
+      var items = [].slice.call(box.querySelectorAll(sel)), over = null;
+      items.forEach(function (x) { if (x === DRG.it) return; var q = x.getBoundingClientRect(); if (e.clientX >= q.left && e.clientX <= q.right && e.clientY >= q.top && e.clientY <= q.bottom) over = x; });
+      if (over) { if (items.indexOf(DRG.it) < items.indexOf(over)) over.after(DRG.it); else over.before(DRG.it); }
+    }
+    function end(e) {
+      if (!DRG || e.pointerId !== DRG.pid) return;
+      document.removeEventListener("pointermove", mv); document.removeEventListener("pointerup", end); document.removeEventListener("pointercancel", end);
+      var ids = [].slice.call(box.querySelectorAll(sel)).map(function (x) { return x.getAttribute("data-k") || x.getAttribute("data-id"); });
+      DRG.g.remove(); DRG.it.classList.remove("dragging"); box.classList.remove("reordering"); DRG = null; dragEnd = Date.now();
+      save(ids);
+    }
+  });
+}
+/* w czasie przenoszenia: bez przewijania strony, bez menu „długiego dotknięcia” i bez kliknięcia po puszczeniu */
+document.addEventListener("touchmove", function (e) { if (DRG) e.preventDefault(); }, { passive: false });
+document.addEventListener("click", function (e) { if (Date.now() - dragEnd < 450) { e.preventDefault(); e.stopPropagation(); } }, true);
+document.addEventListener("contextmenu", function (e) { if (e.target.closest && e.target.closest(".tile, #tabs button")) e.preventDefault(); });
+
 /* ---------- zdarzenia ---------- */
 document.addEventListener("click", function (ev) {
   var t = ev.target.closest("[data-a]"); if (!t) return;
@@ -1831,6 +1881,7 @@ document.addEventListener("click", function (ev) {
     case "rev": if (!hasAI()) { go("ust"); toast("Najpierw dodaj klucz API."); break; } doReview(); break;
     case "chats": { var ci = $("chatin"); if (ci && ci.value.trim()) { var v2 = ci.value, vv = CHATV; stopDict(); if (S.set.tts.mode === "always" || (S.set.tts.mode === "voice" && vv)) ttsUnlock(); chatSend(v2, { v: vv }); } break; }
     case "chatretry": chatAsk(); break;
+    case "ordreset": delete S.set.tabOrd; delete S.set.tileOrd; sv(); render(); toast("↺ Przywrócono domyślną kolejność"); break;
     case "stradd": { var sx = NAW.STRX[+t.getAttribute("data-i")]; if (sx && !S.ex.r.some(function (e) { return e[0] === sx[0]; })) { S.ex.r.push(strCopy(sx)); sv(); toast("➕ Dodano: " + sx[0]); var sy = window.scrollY; render(); var sc = $("strcat"); if (sc) sc.open = true; window.scrollTo(0, sy); } break; }
     case "updnow": location.reload(); break;
     case "updchk": updCheckNow(); break;
